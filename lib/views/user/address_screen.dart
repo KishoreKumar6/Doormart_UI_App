@@ -107,7 +107,9 @@ class _AddressScreenState extends State<AddressScreen> {
                     onTap: () async {
                       final result = await Navigator.push<bool>(
                         context,
-                        MaterialPageRoute(builder: (_) => const AddEditAddressScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const AddEditAddressScreen(),
+                        ),
                       );
                       if (result == true) await _refresh();
                     },
@@ -125,7 +127,11 @@ class _AddressScreenState extends State<AddressScreen> {
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.add_rounded, size: 24, color: _textDark),
+                      child: const Icon(
+                        Icons.add_rounded,
+                        size: 24,
+                        color: _textDark,
+                      ),
                     ),
                   ),
                 ],
@@ -148,27 +154,35 @@ class _AddressScreenState extends State<AddressScreen> {
                         return const Padding(
                           padding: EdgeInsets.symmetric(vertical: 28),
                           child: Center(
-                              child: CircularProgressIndicator(color: _accent)),
+                            child: CircularProgressIndicator(color: _accent),
+                          ),
                         );
                       }
-                      final addresses = _filter(snapshot.data ?? const <AddressModel>[]);
+                      final addresses = _filter(
+                        snapshot.data ?? const <AddressModel>[],
+                      );
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _SearchRow(
                             controller: _searchController,
-                            onChanged: (value) => setState(() => _query = value),
+                            onChanged: (value) =>
+                                setState(() => _query = value),
                           ),
                           const SizedBox(height: 16),
                           if (addresses.isEmpty)
-                            _EmptyAddressState(onAdd: () async {
-                              final result = await Navigator.push<bool>(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const AddEditAddressScreen()),
-                              );
-                              if (result == true) await _refresh();
-                            })
+                            _EmptyAddressState(
+                              onAdd: () async {
+                                final result = await Navigator.push<bool>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const AddEditAddressScreen(),
+                                  ),
+                                );
+                                if (result == true) await _refresh();
+                              },
+                            )
                           else
                             ...addresses.map(
                               (item) => Padding(
@@ -186,11 +200,15 @@ class _AddressScreenState extends State<AddressScreen> {
                                     if (result == true) await _refresh();
                                   },
                                   onDelete: () async {
-                                    await context.read<AppState>().deleteAddress(item.id);
+                                    await context
+                                        .read<AppState>()
+                                        .deleteAddress(item.id);
                                     await _refresh();
                                   },
                                   onSetDefault: () async {
-                                    await context.read<AppState>().setDefaultAddress(item.id);
+                                    await context
+                                        .read<AppState>()
+                                        .setDefaultAddress(item.id);
                                     await _refresh();
                                   },
                                 ),
@@ -202,7 +220,8 @@ class _AddressScreenState extends State<AddressScreen> {
                               final result = await Navigator.push<bool>(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (_) => const AddEditAddressScreen()),
+                                  builder: (_) => const AddEditAddressScreen(),
+                                ),
                               );
                               if (result == true) await _refresh();
                             },
@@ -240,7 +259,10 @@ class _SearchRow extends StatelessWidget {
               prefixIcon: const Icon(Icons.search_rounded, color: _textMid),
               filled: true,
               fillColor: _card,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(color: _border),
@@ -411,7 +433,10 @@ class _AddAddressCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: _card,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: _accent.withValues(alpha: 0.25), style: BorderStyle.solid),
+          border: Border.all(
+            color: _accent.withValues(alpha: 0.25),
+            style: BorderStyle.solid,
+          ),
         ),
         child: Column(
           children: const [

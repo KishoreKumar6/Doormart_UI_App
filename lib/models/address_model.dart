@@ -31,9 +31,7 @@ class AddressModel {
     city,
     state,
     pincode,
-  ]
-      .where((part) => part.trim().isNotEmpty)
-      .join(', ');
+  ].where((part) => part.trim().isNotEmpty).join(', ');
 
   factory AddressModel.fromJson(Map<String, dynamic> json) {
     return AddressModel(
@@ -45,9 +43,11 @@ class AddressModel {
       city: json['city'] as String? ?? '',
       state: json['state'] as String? ?? '',
       pincode: json['pincode'] as String? ?? '',
-      latitude: _asDouble(json['latitude'] ?? json['lat']) ??
+      latitude:
+          _asDouble(json['latitude'] ?? json['lat']) ??
           _asDouble(_locationValue(json['location'], 'latitude', 'lat')),
-      longitude: _asDouble(json['longitude'] ?? json['lng']) ??
+      longitude:
+          _asDouble(json['longitude'] ?? json['lng']) ??
           _asDouble(_locationValue(json['location'], 'longitude', 'lng')),
     );
   }
@@ -55,10 +55,7 @@ class AddressModel {
   Map<String, dynamic> toLocationJson() {
     return {
       if (latitude != null && longitude != null)
-        'location': {
-          'latitude': latitude,
-          'longitude': longitude,
-        },
+        'location': {'latitude': latitude, 'longitude': longitude},
     };
   }
 

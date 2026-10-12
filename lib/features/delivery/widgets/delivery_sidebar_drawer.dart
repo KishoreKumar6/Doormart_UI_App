@@ -7,6 +7,7 @@ import '../screens/delivery_earnings_screen.dart';
 import '../screens/delivery_history_screen.dart';
 import '../screens/delivery_home_screen.dart';
 import '../screens/delivery_profile_screen.dart';
+import '../screens/delivery_initial_payment_screen.dart';
 
 class DeliverySidebarDrawer extends StatelessWidget {
   const DeliverySidebarDrawer({super.key, required this.currentRoute});
@@ -18,13 +19,16 @@ class DeliverySidebarDrawer extends StatelessWidget {
     final provider = context.watch<DeliveryProvider>();
     final person = provider.deliveryPerson;
     final initialsSource = (person?.name ?? '').trim();
-    final avatarLetter = initialsSource.isNotEmpty ? initialsSource[0].toUpperCase() : 'D';
+    final avatarLetter = initialsSource.isNotEmpty
+        ? initialsSource[0].toUpperCase()
+        : 'D';
     final currentLabel = switch (currentRoute) {
       DeliveryHomeScreen.routeName => 'Home',
       DeliveryHistoryScreen.routeName => 'History',
       DeliveryEarningsScreen.routeName => 'Earnings',
       DeliveryProfileScreen.routeName => 'Profile',
       ActiveOrderScreen.routeName => 'Active Order',
+      DeliveryInitialPaymentScreen.routeName => 'Initial Payment',
       _ => 'Home',
     };
 
@@ -80,7 +84,7 @@ class DeliverySidebarDrawer extends StatelessWidget {
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
-                          provider.online ? 'ONLINE' : 'OFFLINE',
+                          provider.online ? 'ACTIVE' : 'INACTIVE',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
@@ -147,6 +151,20 @@ class DeliverySidebarDrawer extends StatelessWidget {
                     selected: currentRoute == DeliveryProfileScreen.routeName,
                     onTap: () => _go(context, DeliveryProfileScreen.routeName),
                   ),
+                  _DrawerItem(
+                    icon: Icons.payments_rounded,
+                    label: 'Initial Payment',
+                    selected:
+                        currentRoute == DeliveryInitialPaymentScreen.routeName,
+                    badgeText: provider.isInitialPaymentPaid
+                        ? 'PAID'
+                        : 'REQUIRED',
+                    badgeColor: provider.isInitialPaymentPaid
+                        ? const Color(0xFF22C55E)
+                        : const Color(0xFFE8541A),
+                    onTap: () =>
+                        _go(context, DeliveryInitialPaymentScreen.routeName),
+                  ),
                 ],
               ),
             ),
@@ -164,11 +182,13 @@ class DeliverySidebarDrawer extends StatelessWidget {
     } else if (route == DeliveryHistoryScreen.routeName) {
       Navigator.of(context).pushNamedAndRemoveUntil(route, (r) => r.isFirst);
     } else if (route == DeliveryEarningsScreen.routeName) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const DeliveryEarningsScreen()),
-      );
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const DeliveryEarningsScreen()));
     } else if (route == DeliveryProfileScreen.routeName) {
       Navigator.of(context).pushNamedAndRemoveUntil(route, (r) => r.isFirst);
+    } else if (route == DeliveryInitialPaymentScreen.routeName) {
+      Navigator.of(context).pushNamed(route);
     }
   }
 }
@@ -179,12 +199,16 @@ class _DrawerItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.badgeText,
+    this.badgeColor,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final String? badgeText;
+  final Color? badgeColor;
 
   @override
   Widget build(BuildContext context) {
@@ -229,7 +253,9 @@ class _DrawerItem extends StatelessWidget {
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
-                          fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                          fontWeight: selected
+                              ? FontWeight.w900
+                              : FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -243,6 +269,33 @@ class _DrawerItem extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (badgeText != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (badgeColor ?? const Color(0xFFE8541A)).withValues(
+                        alpha: 0.2,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: (badgeColor ?? const Color(0xFFE8541A))
+                            .withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: Text(
+                      badgeText!,
+                      style: TextStyle(
+                        color: badgeColor ?? const Color(0xFFE8541A),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Icon(
                   Icons.chevron_right_rounded,
                   color: Colors.white.withValues(alpha: 0.7),

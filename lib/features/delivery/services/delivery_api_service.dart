@@ -134,6 +134,47 @@ class DeliveryApiService {
     return response as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> initiateInitialPayment({String? token}) async {
+    final response = await _apiService.post(
+      '/delivery/payment/initiate',
+      token: token,
+    );
+    return response as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> verifyInitialPayment({
+    required String orderId,
+    String? token,
+  }) async {
+    final response = await _apiService.get(
+      '/delivery/payment/verify/$orderId',
+      token: token,
+    );
+    return response as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> simulateSandboxPayment({
+    required String orderId,
+    String? token,
+  }) async {
+    final response = await _apiService.post(
+      '/delivery/payment/simulate-sandbox',
+      body: {'orderId': orderId},
+      token: token,
+    );
+    return response as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> fetchInitialPaymentStatus({
+    String? token,
+  }) async {
+    final response = await _apiService.get(
+      '/delivery/payment/status',
+      token: token,
+    );
+    return response as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> updateProfile({
     String? token,
     String? phone,

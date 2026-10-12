@@ -34,9 +34,7 @@ class NotificationService {
 
     _onTap = onTap;
 
-    const androidInit = AndroidInitializationSettings(
-      'ic_notification',
-    );
+    const androidInit = AndroidInitializationSettings('ic_notification');
     const initSettings = InitializationSettings(android: androidInit);
 
     await _plugin.initialize(

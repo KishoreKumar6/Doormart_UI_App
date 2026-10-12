@@ -29,7 +29,8 @@ class RoleAccess {
         routeName == '/vendor/register-success' ||
         routeName == '/vendor/status' ||
         routeName == '/delivery/register' ||
-        routeName == '/delivery/status') {
+        routeName == '/delivery/status' ||
+        routeName == '/delivery/payment') {
       return true;
     }
     if (routeName.startsWith('/vendor')) {
@@ -61,7 +62,8 @@ class RoleAccess {
       return role == UserRoles.deliveryPerson ||
           routeName == '/delivery/login' ||
           routeName == '/delivery/register' ||
-          routeName == '/delivery/status';
+          routeName == '/delivery/status' ||
+          routeName == '/delivery/payment';
     }
     if (_customerOnlyRoutes.contains(routeName)) {
       return role == null || role == UserRoles.user;

@@ -18,8 +18,7 @@ class NetworkImageUrl {
     final uri = Uri.tryParse(value);
     if (uri == null) return value;
 
-    final isLocalHost =
-        uri.host == 'localhost' || uri.host == '127.0.0.1';
+    final isLocalHost = uri.host == 'localhost' || uri.host == '127.0.0.1';
     if (isLocalHost) {
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
         return uri.replace(host: '10.0.2.2').toString();
@@ -32,10 +31,7 @@ class NetworkImageUrl {
       final origin = baseUri.replace(path: '', query: '', fragment: '');
       return origin
           .resolveUri(
-            Uri(
-              path: '/api/media/proxy',
-              queryParameters: {'url': value},
-            ),
+            Uri(path: '/api/media/proxy', queryParameters: {'url': value}),
           )
           .toString();
     }

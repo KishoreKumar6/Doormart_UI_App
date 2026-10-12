@@ -27,8 +27,8 @@ class _AdminAssignDeliveryScreenState extends State<AdminAssignDeliveryScreen> {
 
   Future<List<OrderModel>> _loadOrders() async {
     final orders = await context.read<AppState>().allOrdersForRole(
-          UserRoles.admin,
-        );
+      UserRoles.admin,
+    );
     return orders.where((order) {
       return order.status == OrderStatus.assigned ||
           order.status == OrderStatus.deliveryAccepted ||
@@ -104,9 +104,9 @@ class _AssignmentHeader extends StatelessWidget {
               child: Text(
                 '$count delivery assignments',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],
@@ -141,8 +141,8 @@ class _AssignmentCard extends StatelessWidget {
                 color: cancelled
                     ? const Color(0xFFFFF1F2)
                     : waiting
-                        ? const Color(0xFFFDF2F8)
-                        : const Color(0xFFEAF7EF),
+                    ? const Color(0xFFFDF2F8)
+                    : const Color(0xFFEAF7EF),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: SizedBox(
@@ -152,13 +152,13 @@ class _AssignmentCard extends StatelessWidget {
                   cancelled
                       ? Icons.cancel
                       : waiting
-                          ? Icons.hourglass_top
-                          : Icons.local_shipping,
+                      ? Icons.hourglass_top
+                      : Icons.local_shipping,
                   color: cancelled
                       ? const Color(0xFFBE123C)
                       : waiting
-                          ? const Color(0xFFBE185D)
-                          : const Color(0xFF0F766E),
+                      ? const Color(0xFFBE185D)
+                      : const Color(0xFF0F766E),
                 ),
               ),
             ),
@@ -170,8 +170,8 @@ class _AssignmentCard extends StatelessWidget {
                   Text(
                     'Order #${order.displayOrderId}',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   const SizedBox(height: 3),
                   Text(
@@ -186,8 +186,8 @@ class _AssignmentCard extends StatelessWidget {
                     waiting
                         ? 'Waiting for delivery person'
                         : cancelled
-                            ? 'Order cancelled'
-                            : 'Handled by ${order.deliveryPersonName ?? 'delivery person'}',
+                        ? 'Order cancelled'
+                        : 'Handled by ${order.deliveryPersonName ?? 'delivery person'}',
                     style: TextStyle(
                       color: cancelled
                           ? const Color(0xFFBE123C)
@@ -226,8 +226,8 @@ class _StatusPill extends StatelessWidget {
     final color = status == OrderStatus.cancelled
         ? const Color(0xFFBE123C)
         : status == OrderStatus.delivered
-            ? const Color(0xFF0F766E)
-            : const Color(0xFF1D4ED8);
+        ? const Color(0xFF0F766E)
+        : const Color(0xFF1D4ED8);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -238,10 +238,7 @@ class _StatusPill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         child: Text(
           label,
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.w900,
-          ),
+          style: TextStyle(color: color, fontWeight: FontWeight.w900),
         ),
       ),
     );

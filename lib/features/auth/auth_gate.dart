@@ -29,11 +29,10 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.asset(
-      'assets/animations/doormart_splash.mp4',
-    )
-      ..setLooping(true)
-      ..setVolume(0.0);
+    _controller =
+        VideoPlayerController.asset('assets/animations/doormart_splash.mp4')
+          ..setLooping(true)
+          ..setVolume(0.0);
     _videoInitFuture = _controller.initialize().then((_) => _controller.play());
   }
 
@@ -65,11 +64,13 @@ class _AuthGateState extends State<AuthGate> {
         _target = const LoginScreen();
         return;
       }
-      final approvalStatus = (state.user?.approvalStatus ?? 'approved').toLowerCase();
+      final approvalStatus = (state.user?.approvalStatus ?? 'approved')
+          .toLowerCase();
       _target = switch (role) {
-        UserRoles.deliveryPerson => approvalStatus == 'approved'
-            ? const DeliveryHomeScreen()
-            : const DeliveryStatusScreen(),
+        UserRoles.deliveryPerson =>
+          approvalStatus == 'approved'
+              ? const DeliveryHomeScreen()
+              : const DeliveryStatusScreen(),
         UserRoles.admin => const AdminDashboardScreen(),
         UserRoles.vendor => const VendorDashboardScreen(),
         UserRoles.superAdmin => const SuperAdminDashboardScreen(),

@@ -77,9 +77,9 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
   Future<void> _delete(CategoryModel category) async {
     await context.read<AppState>().deleteCategory(category.id);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${category.name} removed')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${category.name} removed')));
   }
 
   @override
@@ -114,10 +114,8 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
       //     ),
       //   ),
       //   title: const Text('Categories'),
-      
-      // ),
 
-      
+      // ),
       body: SafeArea(
         child: ListView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -134,7 +132,10 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6A00),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -177,8 +178,8 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
                     final crossAxisCount = width >= 900
                         ? 3
                         : width >= 600
-                            ? 2
-                            : 1;
+                        ? 2
+                        : 1;
                     return GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -296,12 +297,24 @@ class _AdminCategoriesDrawer extends StatelessWidget {
     final items = [
       ('Overview', Icons.dashboard, AdminDashboardScreen.routeName),
       ('Orders', Icons.receipt_long, AdminOrdersScreen.routeName),
-      if (isSuperAdmin) ('Notifications', Icons.notifications_active, AdminNotificationsScreen.routeName),
+      if (isSuperAdmin)
+        (
+          'Notifications',
+          Icons.notifications_active,
+          AdminNotificationsScreen.routeName,
+        ),
       ('Products', Icons.inventory_2, ManageProductsScreen.routeName),
-      if (isSuperAdmin) ('Categories', Icons.category, ManageCategoriesScreen.routeName),
-      if (isSuperAdmin) ('Banners', Icons.slideshow, ManageBannersScreen.routeName),
+      if (isSuperAdmin)
+        ('Categories', Icons.category, ManageCategoriesScreen.routeName),
+      if (isSuperAdmin)
+        ('Banners', Icons.slideshow, ManageBannersScreen.routeName),
       if (isSuperAdmin) ('Users', Icons.groups, ManageUsersScreen.routeName),
-      if (isSuperAdmin) ('Delivery partners', Icons.delivery_dining, ManageDeliveryScreen.routeName),
+      if (isSuperAdmin)
+        (
+          'Delivery partners',
+          Icons.delivery_dining,
+          ManageDeliveryScreen.routeName,
+        ),
       ('Stock alerts', Icons.warning_amber, StockScreen.routeName),
     ];
 
@@ -316,16 +329,28 @@ class _AdminCategoriesDrawer extends StatelessWidget {
                   CircleAvatar(
                     radius: 24,
                     backgroundColor: Color(0xFFFFF0EB),
-                    child: Icon(Icons.admin_panel_settings, color: Color(0xFFE8541A)),
+                    child: Icon(
+                      Icons.admin_panel_settings,
+                      color: Color(0xFFE8541A),
+                    ),
                   ),
                   SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Admin menu', style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
+                        Text(
+                          'Admin menu',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
                         SizedBox(height: 4),
-                        Text('Navigate the control center', style: TextStyle(color: Color(0xFF9E9E9E))),
+                        Text(
+                          'Navigate the control center',
+                          style: TextStyle(color: Color(0xFF9E9E9E)),
+                        ),
                       ],
                     ),
                   ),
@@ -340,17 +365,17 @@ class _AdminCategoriesDrawer extends StatelessWidget {
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final item = items[index];
-      final accentColors = const [
-        Color(0xFF0F766E),
-        Color(0xFFB45309),
-        Color(0xFF2563EB),
-        Color(0xFF059669),
-        Color(0xFFEA580C),
-        Color(0xFF7C3AED),
-        Color(0xFFDB2777),
-        Color(0xFFDC2626),
-      ];
-      final accent = accentColors[index % accentColors.length];
+                  final accentColors = const [
+                    Color(0xFF0F766E),
+                    Color(0xFFB45309),
+                    Color(0xFF2563EB),
+                    Color(0xFF059669),
+                    Color(0xFFEA580C),
+                    Color(0xFF7C3AED),
+                    Color(0xFFDB2777),
+                    Color(0xFFDC2626),
+                  ];
+                  final accent = accentColors[index % accentColors.length];
                   final selected = item.$3 == ManageCategoriesScreen.routeName;
                   return Material(
                     color: Colors.white,
@@ -366,10 +391,15 @@ class _AdminCategoriesDrawer extends StatelessWidget {
                               width: 44,
                               height: 44,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFE8541A).withValues(alpha: 0.12),
+                                color: const Color(
+                                  0xFFE8541A,
+                                ).withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              child: Icon(item.$2, color: const Color(0xFFE8541A)),
+                              child: Icon(
+                                item.$2,
+                                color: const Color(0xFFE8541A),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -381,7 +411,12 @@ class _AdminCategoriesDrawer extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            Icon(Icons.chevron_right, color: selected ? const Color(0xFFE8541A) : const Color(0xFF9E9E9E)),
+                            Icon(
+                              Icons.chevron_right,
+                              color: selected
+                                  ? const Color(0xFFE8541A)
+                                  : const Color(0xFF9E9E9E),
+                            ),
                           ],
                         ),
                       ),
@@ -406,7 +441,10 @@ class _AdminCategoriesDrawer extends StatelessWidget {
                     ),
                   ),
                   icon: const Icon(Icons.logout),
-                  label: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w800)),
+                  label: const Text(
+                    'Logout',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                 ),
               ),
             ),
@@ -457,9 +495,15 @@ class _TopBar extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFFF6A00), width: 1.3),
+                borderSide: const BorderSide(
+                  color: Color(0xFFFF6A00),
+                  width: 1.3,
+                ),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
             ),
           ),
         ),
@@ -472,7 +516,10 @@ class _TopBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFFF0D8C8)),
           ),
-          child: const Icon(Icons.filter_alt_outlined, color: Color(0xFF6B7280)),
+          child: const Icon(
+            Icons.filter_alt_outlined,
+            color: Color(0xFF6B7280),
+          ),
         ),
       ],
     );
@@ -510,7 +557,9 @@ class _CategoryCard extends StatelessWidget {
         children: [
           Expanded(
             child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
               child: _CategoryImage(imageUrl: category.imageUrl),
             ),
           ),
@@ -653,7 +702,11 @@ class _EmptyState extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.category_outlined, size: 48, color: Color(0xFFFF6A00)),
+          const Icon(
+            Icons.category_outlined,
+            size: 48,
+            color: Color(0xFFFF6A00),
+          ),
           const SizedBox(height: 12),
           const Text(
             'No categories found',
@@ -709,7 +762,9 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.initial.name);
-    _descriptionController = TextEditingController(text: widget.initial.description);
+    _descriptionController = TextEditingController(
+      text: widget.initial.description,
+    );
     _imageUrlController = TextEditingController(text: widget.initial.imageUrl);
   }
 
@@ -750,7 +805,9 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
         _pickedImageBytes = null;
       }
       setState(() {});
-      final imageUrl = await context.read<AppState>().uploadCategoryImage(picked.path);
+      final imageUrl = await context.read<AppState>().uploadCategoryImage(
+        picked.path,
+      );
       if (!mounted) return;
       _imageUrlController.text = imageUrl;
       _pickedImagePath = null;
@@ -847,12 +904,17 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
                       else if (_pickedImagePath != null)
                         ClipRRect(
                           borderRadius: BorderRadius.circular(18),
-                          child: Image.file(File(_pickedImagePath!), fit: BoxFit.cover),
+                          child: Image.file(
+                            File(_pickedImagePath!),
+                            fit: BoxFit.cover,
+                          ),
                         )
                       else if (_imageUrlController.text.trim().isNotEmpty)
                         ClipRRect(
                           borderRadius: BorderRadius.circular(18),
-                          child: _CategoryImage(imageUrl: _imageUrlController.text.trim()),
+                          child: _CategoryImage(
+                            imageUrl: _imageUrlController.text.trim(),
+                          ),
                         )
                       else
                         const _UploadPlaceholder(),
@@ -860,7 +922,9 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
                         Container(
                           color: Colors.black.withValues(alpha: 0.12),
                           child: const Center(
-                            child: CircularProgressIndicator(color: Color(0xFFFF6A00)),
+                            child: CircularProgressIndicator(
+                              color: Color(0xFFFF6A00),
+                            ),
                           ),
                         ),
                     ],
@@ -883,7 +947,9 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                    onPressed: _saving
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF475569),
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -915,7 +981,11 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
                               color: Colors.white,
                             ),
                           )
-                        : Text(widget.isEditing ? 'Save Changes' : 'Create Category'),
+                        : Text(
+                            widget.isEditing
+                                ? 'Save Changes'
+                                : 'Create Category',
+                          ),
                   ),
                 ),
               ],
@@ -961,7 +1031,10 @@ class _UploadPlaceholder extends StatelessWidget {
           SizedBox(height: 10),
           Text(
             'Click to upload or drag and drop',
-            style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF111827)),
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF111827),
+            ),
           ),
           SizedBox(height: 4),
           Text(

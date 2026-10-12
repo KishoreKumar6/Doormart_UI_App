@@ -147,136 +147,157 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                  const Text(
-                    'ADDRESS LABEL',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                      color: _textMid,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      _LabelChip(label: 'Home', icon: Icons.home_rounded, selected: _label.text == 'Home', onTap: () => setState(() => _label.text = 'Home')),
-                      const SizedBox(width: 10),
-                      _LabelChip(label: 'Work', icon: Icons.work_outline_rounded, selected: _label.text == 'Work', onTap: () => setState(() => _label.text = 'Work')),
-                      const SizedBox(width: 10),
-                      _LabelChip(label: 'Other', icon: Icons.more_horiz_rounded, selected: _label.text == 'Other', onTap: () => setState(() => _label.text = 'Other')),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  _Field(
-                    label: 'HOUSE / FLAT / BLOCK NO.',
-                    hint: 'e.g. Building 4A, Suite 201',
-                    controller: _house,
-                    maxLines: 1,
-                  ),
-                  const SizedBox(height: 14),
-                  _Field(
-                    label: 'AREA / ROAD / STREET',
-                    hint: 'e.g. Innovation Drive, Tech District',
-                    controller: _area,
-                    maxLines: 1,
-                  ),
-                  const SizedBox(height: 14),
-                  _Field(
-                    label: 'LANDMARK',
-                    optional: true,
-                    hint: 'e.g. Near Central Park Fountain',
-                    controller: _landmark,
-                    maxLines: 1,
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _Field(
-                          label: 'CITY',
-                          hint: 'e.g. Chennai',
-                          controller: _city,
+                        const Text(
+                          'ADDRESS LABEL',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                            color: _textMid,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _Field(
-                          label: 'STATE',
-                          hint: 'e.g. Tamil Nadu',
-                          controller: _state,
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            _LabelChip(
+                              label: 'Home',
+                              icon: Icons.home_rounded,
+                              selected: _label.text == 'Home',
+                              onTap: () => setState(() => _label.text = 'Home'),
+                            ),
+                            const SizedBox(width: 10),
+                            _LabelChip(
+                              label: 'Work',
+                              icon: Icons.work_outline_rounded,
+                              selected: _label.text == 'Work',
+                              onTap: () => setState(() => _label.text = 'Work'),
+                            ),
+                            const SizedBox(width: 10),
+                            _LabelChip(
+                              label: 'Other',
+                              icon: Icons.more_horiz_rounded,
+                              selected: _label.text == 'Other',
+                              onTap: () =>
+                                  setState(() => _label.text = 'Other'),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _Field(
-                    label: 'PINCODE',
-                    hint: 'e.g. 600001',
-                    controller: _pincode,
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _Field(
-                          label: 'LATITUDE',
-                          hint: 'e.g. 13.0827',
-                          controller: _lat,
-                          keyboardType:
-                              const TextInputType.numberWithOptions(
-                                decimal: true,
-                                signed: true,
+                        const SizedBox(height: 18),
+                        _Field(
+                          label: 'HOUSE / FLAT / BLOCK NO.',
+                          hint: 'e.g. Building 4A, Suite 201',
+                          controller: _house,
+                          maxLines: 1,
+                        ),
+                        const SizedBox(height: 14),
+                        _Field(
+                          label: 'AREA / ROAD / STREET',
+                          hint: 'e.g. Innovation Drive, Tech District',
+                          controller: _area,
+                          maxLines: 1,
+                        ),
+                        const SizedBox(height: 14),
+                        _Field(
+                          label: 'LANDMARK',
+                          optional: true,
+                          hint: 'e.g. Near Central Park Fountain',
+                          controller: _landmark,
+                          maxLines: 1,
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _Field(
+                                label: 'CITY',
+                                hint: 'e.g. Chennai',
+                                controller: _city,
                               ),
-                          onChanged: _onCoordinateChanged,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _Field(
-                          label: 'LONGITUDE',
-                          hint: 'e.g. 80.2707',
-                          controller: _lng,
-                          keyboardType:
-                              const TextInputType.numberWithOptions(
-                                decimal: true,
-                                signed: true,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _Field(
+                                label: 'STATE',
+                                hint: 'e.g. Tamil Nadu',
+                                controller: _state,
                               ),
-                          onChanged: _onCoordinateChanged,
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _LocationCard(
-                    latitude: _latitude,
-                    longitude: _longitude,
-                    loading: _capturingLocation || _clearingLocation,
-                    onUseCurrentLocation: _captureLocation,
-                    onClear: _latitude != null ||
-                            _longitude != null ||
-                            _lat.text.trim().isNotEmpty ||
-                            _lng.text.trim().isNotEmpty
-                        ? () => _clearLocation()
-                        : null,
-                  ),
-                  const SizedBox(height: 14),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    value: _defaultAddress,
-                    onChanged: (value) => setState(() => _defaultAddress = value),
-                    activeColor: _accent,
-                    title: const Text(
-                      'Set as default address',
-                      style: TextStyle(fontWeight: FontWeight.w700, color: _textDark),
-                    ),
-                    subtitle: const Text(
-                      'Quickly select this for future orders',
-                      style: TextStyle(color: _textMid, fontSize: 12),
-                    ),
-                  ),
+                        const SizedBox(height: 14),
+                        _Field(
+                          label: 'PINCODE',
+                          hint: 'e.g. 600001',
+                          controller: _pincode,
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _Field(
+                                label: 'LATITUDE',
+                                hint: 'e.g. 13.0827',
+                                controller: _lat,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                      signed: true,
+                                    ),
+                                onChanged: _onCoordinateChanged,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _Field(
+                                label: 'LONGITUDE',
+                                hint: 'e.g. 80.2707',
+                                controller: _lng,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                      signed: true,
+                                    ),
+                                onChanged: _onCoordinateChanged,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _LocationCard(
+                          latitude: _latitude,
+                          longitude: _longitude,
+                          loading: _capturingLocation || _clearingLocation,
+                          onUseCurrentLocation: _captureLocation,
+                          onClear:
+                              _latitude != null ||
+                                  _longitude != null ||
+                                  _lat.text.trim().isNotEmpty ||
+                                  _lng.text.trim().isNotEmpty
+                              ? () => _clearLocation()
+                              : null,
+                        ),
+                        const SizedBox(height: 14),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          value: _defaultAddress,
+                          onChanged: (value) =>
+                              setState(() => _defaultAddress = value),
+                          activeColor: _accent,
+                          title: const Text(
+                            'Set as default address',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: _textDark,
+                            ),
+                          ),
+                          subtitle: const Text(
+                            'Quickly select this for future orders',
+                            style: TextStyle(color: _textMid, fontSize: 12),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -293,14 +314,19 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: _accent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
             onPressed: _saving ? null : _save,
             child: _saving
                 ? const SizedBox(
                     height: 18,
                     width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : Text(editing ? 'Update Address' : 'Save Address'),
           ),
@@ -355,15 +381,15 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-    void _onCoordinateChanged(String _) {
+  void _onCoordinateChanged(String _) {
     final lat = double.tryParse(_lat.text.trim());
     final lng = double.tryParse(_lng.text.trim());
     setState(() {
@@ -404,9 +430,9 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _clearingLocation = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -423,9 +449,9 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _capturingLocation = false);
     }
@@ -469,7 +495,10 @@ class _Field extends StatelessWidget {
             ),
             if (optional) ...[
               const SizedBox(width: 6),
-              const Text('(OPTIONAL)', style: TextStyle(fontSize: 10, color: _textMid)),
+              const Text(
+                '(OPTIONAL)',
+                style: TextStyle(fontSize: 10, color: _textMid),
+              ),
             ],
           ],
         ),
@@ -544,7 +573,11 @@ class _LocationCard extends StatelessWidget {
             hasLocation
                 ? 'Saved pin: ${latitude!.toStringAsFixed(6)}, ${longitude!.toStringAsFixed(6)}'
                 : 'No pin saved yet. Use your current location for exact delivery navigation.',
-            style: const TextStyle(fontSize: 12.5, color: _textDark, height: 1.4),
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: _textDark,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -563,7 +596,10 @@ class _LocationCard extends StatelessWidget {
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Text('Use current location'),
                 ),

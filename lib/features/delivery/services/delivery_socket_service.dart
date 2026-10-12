@@ -41,9 +41,7 @@ class DeliverySocketService {
         'room': 'available_delivery_persons',
         'deliveryPersonId': deliveryPersonId,
       });
-      _socket!.emit('join_room', {
-        'room': 'available_delivery_persons',
-      });
+      _socket!.emit('join_room', {'room': 'available_delivery_persons'});
       onDeliveryOnline?.call();
     });
 
@@ -67,8 +65,14 @@ class DeliverySocketService {
     _socket!.on('order_delivered', onOrderDelivered);
   }
 
-  void emitAcceptOrder({required String orderId, required String deliveryPersonId}) {
-    _socket?.emit('accept_order', {'orderId': orderId, 'deliveryPersonId': deliveryPersonId});
+  void emitAcceptOrder({
+    required String orderId,
+    required String deliveryPersonId,
+  }) {
+    _socket?.emit('accept_order', {
+      'orderId': orderId,
+      'deliveryPersonId': deliveryPersonId,
+    });
   }
 
   void emitDeliveryOffline({required String deliveryPersonId}) {

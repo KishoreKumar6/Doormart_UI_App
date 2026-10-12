@@ -124,8 +124,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final selectedMrp = variant.discountCost > selectedPrice
         ? variant.discountCost
         : product.mrp > selectedPrice
-            ? product.mrp
-            : selectedPrice * 1.12;
+        ? product.mrp
+        : selectedPrice * 1.12;
     final selectedStock = variant.stock > 0 ? variant.stock : product.stock;
 
     return Scaffold(
@@ -200,9 +200,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              selectedStock > 0
-                  ? '$selectedStock in stock'
-                  : 'Out of stock',
+              selectedStock > 0 ? '$selectedStock in stock' : 'Out of stock',
               style: TextStyle(
                 color: selectedStock > 10
                     ? const Color(0xFF0F9D58)
@@ -238,9 +236,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       vertical: 12,
                     ),
                     decoration: BoxDecoration(
-                      color: selected
-                          ? const Color(0xFFFFF0EB)
-                          : Colors.white,
+                      color: selected ? const Color(0xFFFFF0EB) : Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: selected
@@ -308,10 +304,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             ],
             Row(
               children: [
-                _StepButton(
-                  icon: Icons.remove_rounded,
-                  onTap: _decrement,
-                ),
+                _StepButton(icon: Icons.remove_rounded, onTap: _decrement),
                 const SizedBox(width: 12),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -338,7 +331,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 ),
                 const Spacer(),
                 FilledButton(
-                  onPressed: selectedStock == 0 ? null : () => _addToCart(product),
+                  onPressed: selectedStock == 0
+                      ? null
+                      : () => _addToCart(product),
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFFE8541A),
                     padding: const EdgeInsets.symmetric(

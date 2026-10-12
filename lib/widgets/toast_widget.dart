@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import '../app.dart';
 
 void showToast(BuildContext context, String message) {
-  final messenger = DoormartDeliveryApp.scaffoldMessengerKey.currentState ??
+  final messenger =
+      DoormartDeliveryApp.scaffoldMessengerKey.currentState ??
       ScaffoldMessenger.of(context);
   messenger
     ..hideCurrentSnackBar()

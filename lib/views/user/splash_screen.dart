@@ -27,11 +27,10 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.asset(
-      'assets/animations/doormart_splash.mp4',
-    )
-      ..setLooping(true)
-      ..setVolume(0.0);
+    _controller =
+        VideoPlayerController.asset('assets/animations/doormart_splash.mp4')
+          ..setLooping(true)
+          ..setVolume(0.0);
     _videoInitFuture = _controller.initialize().then((_) => _controller.play());
   }
 
@@ -49,7 +48,8 @@ class _SplashScreenState extends State<SplashScreen> {
     _navigated = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final approvalStatus = (state.user?.approvalStatus ?? 'approved').toLowerCase();
+      final approvalStatus = (state.user?.approvalStatus ?? 'approved')
+          .toLowerCase();
       final target = switch (state.user?.role) {
         'delivery_person' =>
           approvalStatus == 'approved'
@@ -61,9 +61,9 @@ class _SplashScreenState extends State<SplashScreen> {
         'user' => const UserHomeScreen(),
         _ => const LoginScreen(),
       };
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => target),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => target));
     });
   }
 

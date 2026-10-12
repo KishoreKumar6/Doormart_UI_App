@@ -85,9 +85,9 @@ class _ManageBannersScreenState extends State<ManageBannersScreen> {
       await _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -104,26 +104,26 @@ class _ManageBannersScreenState extends State<ManageBannersScreen> {
       await _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Delete failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
     }
   }
 
   Future<void> _toggleActive(BannerModel banner) async {
     try {
       await context.read<AppState>().updateBanner(
-            bannerId: banner.id,
-            title: banner.title,
-            imageUrl: banner.imageUrl,
-            active: !banner.active,
-          );
+        bannerId: banner.id,
+        title: banner.title,
+        imageUrl: banner.imageUrl,
+        active: !banner.active,
+      );
       await _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Toggle failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Toggle failed: $e')));
     }
   }
 
@@ -165,7 +165,9 @@ class _ManageBannersScreenState extends State<ManageBannersScreen> {
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           children: [
-            _BannersHero(onOpenMenu: () => _scaffoldKey.currentState?.openDrawer()),
+            _BannersHero(
+              onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
+            ),
             const SizedBox(height: 16),
             Align(
               alignment: Alignment.centerRight,
@@ -174,7 +176,10 @@ class _ManageBannersScreenState extends State<ManageBannersScreen> {
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6A00),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -197,7 +202,11 @@ class _ManageBannersScreenState extends State<ManageBannersScreen> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.red,
+                    ),
                     const SizedBox(height: 8),
                     Text(_error!, textAlign: TextAlign.center),
                     const SizedBox(height: 16),
@@ -215,7 +224,11 @@ class _ManageBannersScreenState extends State<ManageBannersScreen> {
                 child: Center(
                   child: Column(
                     children: [
-                      Icon(Icons.slideshow_rounded, size: 56, color: Colors.grey.shade300),
+                      Icon(
+                        Icons.slideshow_rounded,
+                        size: 56,
+                        color: Colors.grey.shade300,
+                      ),
                       const SizedBox(height: 12),
                       const Text(
                         'No banners yet',
@@ -241,8 +254,8 @@ class _ManageBannersScreenState extends State<ManageBannersScreen> {
                   final crossAxisCount = width >= 900
                       ? 3
                       : width >= 600
-                          ? 2
-                          : 1;
+                      ? 2
+                      : 1;
                   return GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -344,10 +357,7 @@ class _BannersHero extends StatelessWidget {
 }
 
 class _AdminDrawer extends StatelessWidget {
-  const _AdminDrawer({
-    required this.onNavigate,
-    required this.onLogout,
-  });
+  const _AdminDrawer({required this.onNavigate, required this.onLogout});
 
   final void Function(String route) onNavigate;
   final Future<void> Function() onLogout;
@@ -359,12 +369,24 @@ class _AdminDrawer extends StatelessWidget {
     final items = [
       ('Overview', Icons.dashboard, AdminDashboardScreen.routeName),
       ('Orders', Icons.receipt_long, AdminOrdersScreen.routeName),
-      if (isSuperAdmin) ('Notifications', Icons.notifications_active, AdminNotificationsScreen.routeName),
+      if (isSuperAdmin)
+        (
+          'Notifications',
+          Icons.notifications_active,
+          AdminNotificationsScreen.routeName,
+        ),
       ('Products', Icons.inventory_2, ManageProductsScreen.routeName),
-      if (isSuperAdmin) ('Categories', Icons.category, ManageCategoriesScreen.routeName),
-      if (isSuperAdmin) ('Banners', Icons.slideshow, ManageBannersScreen.routeName),
+      if (isSuperAdmin)
+        ('Categories', Icons.category, ManageCategoriesScreen.routeName),
+      if (isSuperAdmin)
+        ('Banners', Icons.slideshow, ManageBannersScreen.routeName),
       if (isSuperAdmin) ('Users', Icons.groups, ManageUsersScreen.routeName),
-      if (isSuperAdmin) ('Delivery partners', Icons.delivery_dining, ManageDeliveryScreen.routeName),
+      if (isSuperAdmin)
+        (
+          'Delivery partners',
+          Icons.delivery_dining,
+          ManageDeliveryScreen.routeName,
+        ),
       ('Stock alerts', Icons.warning_amber, StockScreen.routeName),
     ];
 
@@ -379,16 +401,28 @@ class _AdminDrawer extends StatelessWidget {
                   CircleAvatar(
                     radius: 24,
                     backgroundColor: Color(0xFFFFF0EB),
-                    child: Icon(Icons.admin_panel_settings, color: Color(0xFFE8541A)),
+                    child: Icon(
+                      Icons.admin_panel_settings,
+                      color: Color(0xFFE8541A),
+                    ),
                   ),
                   SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Admin menu', style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
+                        Text(
+                          'Admin menu',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
                         SizedBox(height: 4),
-                        Text('Navigate the control center', style: TextStyle(color: Color(0xFF9E9E9E))),
+                        Text(
+                          'Navigate the control center',
+                          style: TextStyle(color: Color(0xFF9E9E9E)),
+                        ),
                       ],
                     ),
                   ),
@@ -403,17 +437,17 @@ class _AdminDrawer extends StatelessWidget {
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final item = items[index];
-      final accentColors = const [
-        Color(0xFF0F766E),
-        Color(0xFFB45309),
-        Color(0xFF2563EB),
-        Color(0xFF059669),
-        Color(0xFFEA580C),
-        Color(0xFF7C3AED),
-        Color(0xFFDB2777),
-        Color(0xFFDC2626),
-      ];
-      final accent = accentColors[index % accentColors.length];
+                  final accentColors = const [
+                    Color(0xFF0F766E),
+                    Color(0xFFB45309),
+                    Color(0xFF2563EB),
+                    Color(0xFF059669),
+                    Color(0xFFEA580C),
+                    Color(0xFF7C3AED),
+                    Color(0xFFDB2777),
+                    Color(0xFFDC2626),
+                  ];
+                  final accent = accentColors[index % accentColors.length];
                   final selected = item.$3 == ManageBannersScreen.routeName;
                   return Material(
                     color: Colors.white,
@@ -429,7 +463,9 @@ class _AdminDrawer extends StatelessWidget {
                               width: 44,
                               height: 44,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFE8541A).withValues(alpha: 0.12),
+                                color: const Color(
+                                  0xFFE8541A,
+                                ).withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: Icon(
@@ -447,7 +483,12 @@ class _AdminDrawer extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            Icon(Icons.chevron_right, color: selected ? const Color(0xFFE8541A) : const Color(0xFF9E9E9E)),
+                            Icon(
+                              Icons.chevron_right,
+                              color: selected
+                                  ? const Color(0xFFE8541A)
+                                  : const Color(0xFF9E9E9E),
+                            ),
                           ],
                         ),
                       ),
@@ -472,7 +513,10 @@ class _AdminDrawer extends StatelessWidget {
                     ),
                   ),
                   icon: const Icon(Icons.logout),
-                  label: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w800)),
+                  label: const Text(
+                    'Logout',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                 ),
               ),
             ),
@@ -516,7 +560,9 @@ class _BannerCard extends StatelessWidget {
         children: [
           Expanded(
             child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
               child: _BannerThumb(imageUrl: banner.imageUrl),
             ),
           ),
@@ -561,7 +607,10 @@ class _BannerCard extends StatelessWidget {
                       onPressed: onDelete,
                       child: const Text(
                         'Delete',
-                        style: TextStyle(fontWeight: FontWeight.w800, color: Colors.red),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: Colors.red,
+                        ),
                       ),
                     ),
                   ],
@@ -610,7 +659,11 @@ class _ThumbFallback extends StatelessWidget {
     return const ColoredBox(
       color: Color(0xFFF1F5F9),
       child: Center(
-        child: Icon(Icons.slideshow_rounded, size: 48, color: Color(0xFF0F9D58)),
+        child: Icon(
+          Icons.slideshow_rounded,
+          size: 48,
+          color: Color(0xFF0F9D58),
+        ),
       ),
     );
   }
@@ -625,8 +678,15 @@ class _DeleteConfirmDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 40),
-      title: const Text('Delete banner', style: TextStyle(fontWeight: FontWeight.w900)),
+      icon: const Icon(
+        Icons.delete_outline_rounded,
+        color: Colors.red,
+        size: 40,
+      ),
+      title: const Text(
+        'Delete banner',
+        style: TextStyle(fontWeight: FontWeight.w900),
+      ),
       content: Text(
         'Are you sure you want to delete "$title"?\nThis cannot be undone.',
         textAlign: TextAlign.center,
@@ -701,10 +761,10 @@ class _BannerEditorSheetState extends State<_BannerEditorSheet> {
     try {
       _pickedPreviewBytes = await picked.readAsBytes();
       final url = await context.read<AppState>().uploadCategoryImage(
-            picked.path,
-            bytes: _pickedPreviewBytes,
-            fileName: picked.name,
-          );
+        picked.path,
+        bytes: _pickedPreviewBytes,
+        fileName: picked.name,
+      );
       if (!mounted) return;
       setState(() {
         _imageCtrl.text = url;
@@ -732,11 +792,7 @@ class _BannerEditorSheetState extends State<_BannerEditorSheet> {
     }
     Navigator.pop(
       context,
-      _BannerResult(
-        title: title,
-        imageUrl: imageUrl,
-        active: _active,
-      ),
+      _BannerResult(title: title, imageUrl: imageUrl, active: _active),
     );
   }
 
@@ -747,10 +803,10 @@ class _BannerEditorSheetState extends State<_BannerEditorSheet> {
     final preview = _pickedPreviewBytes != null
         ? Image.memory(_pickedPreviewBytes!, fit: BoxFit.cover)
         : imageUrl.startsWith('http')
-            ? Image.network(imageUrl, fit: BoxFit.cover)
-            : imageUrl.startsWith('assets/')
-                ? Image.asset(imageUrl, fit: BoxFit.cover)
-                : const _ThumbFallback();
+        ? Image.network(imageUrl, fit: BoxFit.cover)
+        : imageUrl.startsWith('assets/')
+        ? Image.asset(imageUrl, fit: BoxFit.cover)
+        : const _ThumbFallback();
 
     return Container(
       padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + bottomInset),
@@ -814,7 +870,9 @@ class _BannerEditorSheetState extends State<_BannerEditorSheet> {
                         Container(
                           color: Colors.black.withValues(alpha: 0.12),
                           child: const Center(
-                            child: CircularProgressIndicator(color: Color(0xFFFF6A00)),
+                            child: CircularProgressIndicator(
+                              color: Color(0xFFFF6A00),
+                            ),
                           ),
                         ),
                     ],
@@ -827,7 +885,9 @@ class _BannerEditorSheetState extends State<_BannerEditorSheet> {
               label: 'Image URL',
               child: TextFormField(
                 controller: _imageCtrl,
-                decoration: _inputDecoration('Upload from gallery or paste URL'),
+                decoration: _inputDecoration(
+                  'Upload from gallery or paste URL',
+                ),
                 onChanged: (_) => setState(() => _error = null),
               ),
             ),

@@ -49,7 +49,9 @@ class NotificationScreen extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(14),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.07),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.07,
+                                      ),
                                       blurRadius: 10,
                                       offset: const Offset(0, 4),
                                     ),
@@ -105,7 +107,8 @@ class NotificationScreen extends StatelessWidget {
                         child: _SummaryCard(
                           total: notifications.length,
                           unread: notifications.length,
-                          loading: snapshot.connectionState != ConnectionState.done,
+                          loading:
+                              snapshot.connectionState != ConnectionState.done,
                         ),
                       ),
                     ),
@@ -121,7 +124,8 @@ class NotificationScreen extends StatelessWidget {
                       padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomInset),
                       sliver: _NotificationList(
                         notifications: notifications,
-                        loading: snapshot.connectionState != ConnectionState.done,
+                        loading:
+                            snapshot.connectionState != ConnectionState.done,
                       ),
                     ),
                   ],
@@ -178,7 +182,11 @@ class _SummaryCard extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: const Icon(Icons.campaign_rounded, color: Colors.white, size: 28),
+            child: const Icon(
+              Icons.campaign_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -230,11 +238,7 @@ class _InfoStrip extends StatelessWidget {
           Expanded(
             child: Text(
               'Order updates, offers, and delivery alerts will appear here.',
-              style: TextStyle(
-                color: _kTextMid,
-                fontSize: 12.5,
-                height: 1.4,
-              ),
+              style: TextStyle(color: _kTextMid, fontSize: 12.5, height: 1.4),
             ),
           ),
         ],
@@ -244,10 +248,7 @@ class _InfoStrip extends StatelessWidget {
 }
 
 class _NotificationList extends StatelessWidget {
-  const _NotificationList({
-    required this.notifications,
-    required this.loading,
-  });
+  const _NotificationList({required this.notifications, required this.loading});
 
   final List<dynamic> notifications;
   final bool loading;
@@ -258,9 +259,7 @@ class _NotificationList extends StatelessWidget {
       return const SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.only(top: 40),
-          child: Center(
-            child: CircularProgressIndicator(color: _kOrange),
-          ),
+          child: Center(child: CircularProgressIndicator(color: _kOrange)),
         ),
       );
     }
@@ -290,10 +289,7 @@ class _NotificationList extends StatelessWidget {
               Text(
                 'When you receive order updates or offers, they will show here.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: _kTextMid,
-                  height: 1.4,
-                ),
+                style: TextStyle(color: _kTextMid, height: 1.4),
               ),
             ],
           ),
@@ -307,12 +303,16 @@ class _NotificationList extends StatelessWidget {
       itemBuilder: (context, index) {
         final item = notifications[index] as Map<String, dynamic>;
         final title = item['title'] as String? ?? 'Notification';
-        final body = item['body'] as String? ?? item['message'] as String? ?? '';
+        final body =
+            item['body'] as String? ?? item['message'] as String? ?? '';
         final createdAt = _formatTimestamp(item['createdAt'] ?? item['sentAt']);
         final isUnread = item['read'] != true && item['isRead'] != true;
-        final type = (item['type'] as String? ?? item['notificationType'] as String? ?? 'general')
-            .replaceAll('_', ' ')
-            .toUpperCase();
+        final type =
+            (item['type'] as String? ??
+                    item['notificationType'] as String? ??
+                    'general')
+                .replaceAll('_', ' ')
+                .toUpperCase();
 
         return _NotificationCard(
           title: title,
@@ -373,7 +373,11 @@ class _NotificationCard extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 24),
+            child: const Icon(
+              Icons.notifications_active_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -394,7 +398,10 @@ class _NotificationCard extends StatelessWidget {
                     ),
                     if (unread)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: _kOrangeLight,
                           borderRadius: BorderRadius.circular(999),
@@ -424,7 +431,10 @@ class _NotificationCard extends StatelessWidget {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: _kBg,
                         borderRadius: BorderRadius.circular(999),

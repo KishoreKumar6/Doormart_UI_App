@@ -19,12 +19,14 @@ class DeliveryProvider extends ChangeNotifier {
   DeliveryProvider({
     DeliveryApiService? apiService,
     DeliverySocketService? socketService,
+    FirebaseMessagingService? messagingService,
   }) : apiService = apiService ?? DeliveryApiService(),
-       socketService = socketService ?? DeliverySocketService();
+       socketService = socketService ?? DeliverySocketService(),
+       _messagingService = messagingService ?? FirebaseMessagingService();
 
   final DeliveryApiService apiService;
   final DeliverySocketService socketService;
-  final FirebaseMessagingService _messagingService = FirebaseMessagingService();
+  final FirebaseMessagingService _messagingService;
 
   bool loading = false;
   String? error;
@@ -42,18 +44,52 @@ class DeliveryProvider extends ChangeNotifier {
   static const _deliveryTokenKey = 'delivery_auth_token';
   static const _deliveryUserKey = 'delivery_auth_user';
 
+  // Initial Payment state
+  bool initialPaymentLoading = false;
+  bool initialPaymentVerifying = false;
+  String? initialPaymentError;
+  double initialPaymentAmount = 500.0;
+  String initialPaymentStatus = 'NOT_PAID';
+  DateTime? initialPaymentCompletedAt;
+  String? initialPaymentMethod;
+  String? initialPaymentReference;
+  String? initialPaymentSource;
+
+  bool get isInitialPaymentPaid =>
+      initialPaymentStatus.trim().toUpperCase() == 'PAID' ||
+      (deliveryPerson?.isInitialPaymentPaid ?? false);
+
+  bool get isInitialPaymentRequired => !isInitialPaymentPaid;
+
   Future<void> bootstrap() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       authToken ??= prefs.getString(_deliveryTokenKey);
+      if (authToken == null || authToken!.isEmpty) {
+        final sessionToken = await SessionService().getToken();
+        if (sessionToken != null && sessionToken.isNotEmpty) {
+          authToken = sessionToken;
+        }
+      }
       final rawUser = prefs.getString(_deliveryUserKey);
       if (rawUser != null && rawUser.isNotEmpty) {
         authUser ??= Map<String, dynamic>.from(
           jsonDecode(rawUser) as Map<String, dynamic>,
         );
       }
+      if (authUser == null) {
+        final savedUser = await SessionService().getSavedUser();
+        if (savedUser != null) {
+          authUser = savedUser.toJson();
+        }
+      }
+      if (deliveryPerson == null && authUser != null) {
+        final u = UserModel.fromJson(authUser!);
+        hydrateFromSession(token: authToken ?? '', user: u);
+      }
       if (authToken != null && authToken!.isNotEmpty) {
         await syncOnlineState();
+        await syncInitialPaymentStatus(notify: false);
       }
     } catch (e) {
       debugPrint('Delivery bootstrap skipped: $e');
@@ -63,20 +99,45 @@ class DeliveryProvider extends ChangeNotifier {
   void hydrateFromSession({required String token, required UserModel user}) {
     authToken = token;
     authUser = user.toJson();
-    deliveryPerson ??= DeliveryPersonModel(
-      id: user.id,
-      name: user.name,
-      phone: user.phone,
-      vehicleNumber: '',
-      licenseNumber: '',
-      status: user.status,
-      isOnline: false,
-      active: true,
-      completedOrders: 0,
-      todayEarnings: 0,
-      avatarUrl: user.avatarUrl.isNotEmpty ? user.avatarUrl : null,
-      licenseCardUrl: null,
-    );
+    final pStatus =
+        (authUser?['initialPaymentStatus'] as String?) ?? 'NOT_PAID';
+    final pAmount =
+        (authUser?['initialPaymentAmount'] as num? ?? initialPaymentAmount)
+            .toDouble();
+    initialPaymentStatus = pStatus;
+    if (pAmount > 0) {
+      initialPaymentAmount = pAmount;
+    }
+
+    deliveryPerson =
+        (deliveryPerson ??
+                DeliveryPersonModel(
+                  id: user.id,
+                  name: user.name,
+                  phone: user.phone,
+                  vehicleNumber: '',
+                  licenseNumber: '',
+                  status: user.status,
+                  isOnline: false,
+                  active: true,
+                  completedOrders: 0,
+                  todayEarnings: 0,
+                  avatarUrl: user.avatarUrl.isNotEmpty ? user.avatarUrl : null,
+                  licenseCardUrl: null,
+                  initialPaymentStatus: pStatus,
+                  isPaymentRequired: pStatus.trim().toUpperCase() != 'PAID',
+                  initialPaymentAmount: initialPaymentAmount,
+                ))
+            .copyWith(
+              id: user.id,
+              name: user.name,
+              phone: user.phone,
+              status: user.status,
+              initialPaymentStatus: pStatus,
+              isPaymentRequired: pStatus.trim().toUpperCase() != 'PAID',
+              initialPaymentAmount: initialPaymentAmount,
+            );
+    notifyListeners();
   }
 
   String? _resolveAvatarUrl({
@@ -130,6 +191,33 @@ class DeliveryProvider extends ChangeNotifier {
     if (status != 'active') {
       throw StateError('Access denied: delivery person is inactive.');
     }
+    final pStatus =
+        delivery?['initialPaymentStatus'] as String? ??
+        user['initialPaymentStatus'] as String? ??
+        'NOT_PAID';
+    final pAmount =
+        (delivery?['initialPaymentAmount'] as num? ??
+                user['initialPaymentAmount'] as num? ??
+                500.0)
+            .toDouble();
+    initialPaymentStatus = pStatus;
+    initialPaymentAmount = pAmount;
+    final completedAtStr =
+        delivery?['initialPaymentCompletedAt'] as String? ??
+        user['initialPaymentCompletedAt'] as String?;
+    initialPaymentCompletedAt = completedAtStr != null
+        ? DateTime.tryParse(completedAtStr)
+        : null;
+    initialPaymentMethod =
+        delivery?['initialPaymentMethod'] as String? ??
+        user['initialPaymentMethod'] as String?;
+    initialPaymentReference =
+        delivery?['initialPaymentReference'] as String? ??
+        user['initialPaymentReference'] as String?;
+    initialPaymentSource =
+        delivery?['initialPaymentSource'] as String? ??
+        user['initialPaymentSource'] as String?;
+
     deliveryPerson = DeliveryPersonModel(
       id: user['_id'] as String? ?? user['id'] as String? ?? '',
       name: _resolveDisplayName(user: user, delivery: delivery),
@@ -151,6 +239,13 @@ class DeliveryProvider extends ChangeNotifier {
       licenseCardUrl:
           delivery?['licenseCardUrl'] as String? ??
           user['licenseCardUrl'] as String?,
+      initialPaymentStatus: pStatus,
+      isPaymentRequired: pStatus.trim().toUpperCase() != 'PAID',
+      initialPaymentAmount: pAmount,
+      initialPaymentCompletedAt: initialPaymentCompletedAt,
+      initialPaymentMethod: initialPaymentMethod,
+      initialPaymentReference: initialPaymentReference,
+      initialPaymentSource: initialPaymentSource,
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_deliveryTokenKey, authToken ?? '');
@@ -165,15 +260,29 @@ class DeliveryProvider extends ChangeNotifier {
     if (deliveryPerson == null) return;
     try {
       await _run(() async {
-        final available = await apiService
-            .fetchAvailableOrders(
-              deliveryPersonId: deliveryPerson!.id,
-              token: authToken,
-            )
-            .timeout(const Duration(seconds: 8));
-        pendingRequests
-          ..clear()
-          ..addAll(available);
+        if (!isInitialPaymentRequired) {
+          try {
+            final available = await apiService
+                .fetchAvailableOrders(
+                  deliveryPersonId: deliveryPerson!.id,
+                  token: authToken,
+                )
+                .timeout(const Duration(seconds: 8));
+            pendingRequests
+              ..clear()
+              ..addAll(available);
+          } on ApiException catch (e) {
+            if (e.code == 'INITIAL_PAYMENT_REQUIRED' || e.statusCode == 403) {
+              initialPaymentStatus = 'NOT_PAID';
+              pendingRequests.clear();
+            } else {
+              rethrow;
+            }
+          }
+        } else {
+          pendingRequests.clear();
+        }
+
         final fetchedActive = await apiService
             .fetchActiveOrder(
               deliveryPersonId: deliveryPerson!.id,
@@ -208,20 +317,17 @@ class DeliveryProvider extends ChangeNotifier {
               0,
               (sum, order) => sum + (order.deliveryEarning ?? 45),
             );
-        deliveryPerson = DeliveryPersonModel(
-          id: deliveryPerson!.id,
-          name: deliveryPerson!.name,
-          phone: deliveryPerson!.phone,
-          vehicleNumber: deliveryPerson!.vehicleNumber,
-          licenseNumber: deliveryPerson!.licenseNumber,
-          status: deliveryPerson!.status,
-          isOnline: deliveryPerson!.isOnline,
-          active: deliveryPerson!.active,
+        deliveryPerson = deliveryPerson!.copyWith(
           completedOrders:
               (earnings['completedOrders'] as num? ?? history.length).toInt(),
           todayEarnings: totalEarnings,
-          avatarUrl: deliveryPerson!.avatarUrl,
-          licenseCardUrl: deliveryPerson!.licenseCardUrl,
+          initialPaymentStatus: initialPaymentStatus,
+          isPaymentRequired: isInitialPaymentRequired,
+          initialPaymentAmount: initialPaymentAmount,
+          initialPaymentCompletedAt: initialPaymentCompletedAt,
+          initialPaymentMethod: initialPaymentMethod,
+          initialPaymentReference: initialPaymentReference,
+          initialPaymentSource: initialPaymentSource,
         );
       });
       _syncLiveLocationTracking();
@@ -325,28 +431,80 @@ class DeliveryProvider extends ChangeNotifier {
     final delivery = response['deliveryPerson'] as Map<String, dynamic>?;
     if (user == null) return;
     authUser = user;
-    deliveryPerson = DeliveryPersonModel(
-      id:
-          user['_id'] as String? ??
-          user['id'] as String? ??
-          deliveryPerson?.id ??
-          '',
-      name: _resolveDisplayName(user: user, delivery: delivery),
-      phone: user['phone'] as String? ?? deliveryPerson?.phone ?? '',
-      vehicleNumber:
-          delivery?['vehicleNumber'] as String? ??
-          deliveryPerson?.vehicleNumber ??
-          '',
-      status: user['status'] as String? ?? deliveryPerson?.status ?? 'active',
-      isOnline:
-          delivery?['isOnline'] as bool? ?? deliveryPerson?.isOnline ?? false,
-      active: deliveryPerson?.active ?? true,
-      completedOrders: deliveryPerson?.completedOrders ?? 0,
-      todayEarnings: deliveryPerson?.todayEarnings ?? 0,
-      avatarUrl: _resolveAvatarUrl(user: user, delivery: delivery),
-      licenseNumber: delivery?['licenseNumber'] as String? ?? '',
-      licenseCardUrl: delivery?['licenseCardUrl'] as String?,
-    );
+
+    final pStatus =
+        delivery?['initialPaymentStatus'] as String? ??
+        user['initialPaymentStatus'] as String?;
+    if (pStatus != null && pStatus.isNotEmpty) {
+      initialPaymentStatus = pStatus;
+    }
+    final pAmount =
+        (delivery?['initialPaymentAmount'] as num? ??
+                user['initialPaymentAmount'] as num?)
+            ?.toDouble();
+    if (pAmount != null && pAmount > 0) {
+      initialPaymentAmount = pAmount;
+    }
+    final completedAtStr =
+        delivery?['initialPaymentCompletedAt'] as String? ??
+        user['initialPaymentCompletedAt'] as String?;
+    if (completedAtStr != null) {
+      initialPaymentCompletedAt = DateTime.tryParse(completedAtStr);
+    }
+    initialPaymentMethod =
+        delivery?['initialPaymentMethod'] as String? ??
+        user['initialPaymentMethod'] as String? ??
+        initialPaymentMethod;
+    initialPaymentReference =
+        delivery?['initialPaymentReference'] as String? ??
+        user['initialPaymentReference'] as String? ??
+        initialPaymentReference;
+    initialPaymentSource =
+        delivery?['initialPaymentSource'] as String? ??
+        user['initialPaymentSource'] as String? ??
+        initialPaymentSource;
+
+    deliveryPerson =
+        (deliveryPerson ?? DeliveryPersonModel.fromJson(delivery ?? user))
+            .copyWith(
+              id:
+                  user['_id'] as String? ??
+                  user['id'] as String? ??
+                  deliveryPerson?.id ??
+                  '',
+              name: _resolveDisplayName(user: user, delivery: delivery),
+              phone: user['phone'] as String? ?? deliveryPerson?.phone ?? '',
+              vehicleNumber:
+                  delivery?['vehicleNumber'] as String? ??
+                  deliveryPerson?.vehicleNumber ??
+                  '',
+              status:
+                  user['status'] as String? ??
+                  deliveryPerson?.status ??
+                  'active',
+              isOnline:
+                  delivery?['isOnline'] as bool? ??
+                  deliveryPerson?.isOnline ??
+                  false,
+              active: deliveryPerson?.active ?? true,
+              completedOrders: deliveryPerson?.completedOrders ?? 0,
+              todayEarnings: deliveryPerson?.todayEarnings ?? 0,
+              avatarUrl: _resolveAvatarUrl(user: user, delivery: delivery),
+              licenseNumber:
+                  delivery?['licenseNumber'] as String? ??
+                  deliveryPerson?.licenseNumber ??
+                  '',
+              licenseCardUrl:
+                  delivery?['licenseCardUrl'] as String? ??
+                  deliveryPerson?.licenseCardUrl,
+              initialPaymentStatus: initialPaymentStatus,
+              isPaymentRequired: isInitialPaymentRequired,
+              initialPaymentAmount: initialPaymentAmount,
+              initialPaymentCompletedAt: initialPaymentCompletedAt,
+              initialPaymentMethod: initialPaymentMethod,
+              initialPaymentReference: initialPaymentReference,
+              initialPaymentSource: initialPaymentSource,
+            );
     notifyListeners();
   }
 
@@ -363,7 +521,7 @@ class DeliveryProvider extends ChangeNotifier {
       if (user != null) {
         authUser = user;
       }
-      deliveryPerson = DeliveryPersonModel(
+      deliveryPerson = deliveryPerson!.copyWith(
         id:
             user?['_id'] as String? ??
             user?['id'] as String? ??
@@ -407,7 +565,35 @@ class DeliveryProvider extends ChangeNotifier {
         authUser = user;
       }
       if (delivery != null) {
-        deliveryPerson = DeliveryPersonModel.fromJson(delivery);
+        deliveryPerson = DeliveryPersonModel.fromJson({
+          ...delivery,
+          if (delivery['name'] == null && user?['name'] != null)
+            'name': user!['name'],
+          if (delivery['phone'] == null && user?['phone'] != null)
+            'phone': user!['phone'],
+        });
+      }
+      final pStatus =
+          delivery?['initialPaymentStatus'] as String? ??
+          user?['initialPaymentStatus'] as String? ??
+          response['initialPaymentStatus'] as String?;
+      if (pStatus != null && pStatus.isNotEmpty) {
+        initialPaymentStatus = pStatus;
+      }
+      final pAmount =
+          (delivery?['initialPaymentAmount'] as num? ??
+                  user?['initialPaymentAmount'] as num? ??
+                  response['initialPaymentAmount'] as num?)
+              ?.toDouble();
+      if (pAmount != null && pAmount > 0) {
+        initialPaymentAmount = pAmount;
+      }
+      if (deliveryPerson != null) {
+        deliveryPerson = deliveryPerson!.copyWith(
+          initialPaymentStatus: initialPaymentStatus,
+          isPaymentRequired: isInitialPaymentRequired,
+          initialPaymentAmount: initialPaymentAmount,
+        );
       }
       online =
           deliveryPerson?.isOnline ?? (response['isOnline'] as bool?) ?? false;
@@ -425,33 +611,78 @@ class DeliveryProvider extends ChangeNotifier {
   }
 
   Future<void> goOnline() async {
-    if (deliveryPerson == null) return;
-    await _run(() async {
-      final person = await apiService.goOnline(
-        deliveryPerson!.id,
-        token: authToken,
-      );
-      deliveryPerson = DeliveryPersonModel(
-        id: person.id,
-        name: person.name,
-        phone: person.phone,
-        vehicleNumber: person.vehicleNumber,
-        licenseNumber: person.licenseNumber,
-        status: person.status,
-        isOnline: true,
-        active: person.active,
-        completedOrders: person.completedOrders,
-        todayEarnings: person.todayEarnings,
-        avatarUrl: person.avatarUrl,
-        licenseCardUrl: person.licenseCardUrl,
-      );
-      online = true;
-      _connectRealtimeChannel();
-      if (authToken != null && authToken!.isNotEmpty) {
-        unawaited(_messagingService.registerTokenSync(authToken: authToken!));
+    if (deliveryPerson == null) {
+      if (authUser != null) {
+        hydrateFromSession(
+          token: authToken ?? '',
+          user: UserModel.fromJson(authUser!),
+        );
+      } else {
+        throw const ApiException(
+          'Delivery person account not loaded. Please log in again.',
+          401,
+          code: 'UNAUTHENTICATED',
+        );
       }
-      await loadDashboard();
-      _startRequestRefresh();
+    }
+    if (isInitialPaymentRequired) {
+      throw const ApiException(
+        'Complete your one-time onboarding payment to start working and receive delivery orders.',
+        403,
+        code: 'INITIAL_PAYMENT_REQUIRED',
+      );
+    }
+    await _run(() async {
+      try {
+        final person = await apiService.goOnline(
+          deliveryPerson!.id,
+          token: authToken,
+        );
+        deliveryPerson = deliveryPerson!.copyWith(
+          name: person.name,
+          phone: person.phone,
+          vehicleNumber: person.vehicleNumber,
+          licenseNumber: person.licenseNumber,
+          status: person.status,
+          isOnline: true,
+          active: person.active,
+          completedOrders: person.completedOrders,
+          todayEarnings: person.todayEarnings,
+          avatarUrl: person.avatarUrl,
+          licenseCardUrl: person.licenseCardUrl,
+          initialPaymentStatus: initialPaymentStatus,
+          isPaymentRequired: isInitialPaymentRequired,
+          initialPaymentAmount: initialPaymentAmount,
+          initialPaymentCompletedAt: initialPaymentCompletedAt,
+          initialPaymentMethod: initialPaymentMethod,
+          initialPaymentReference: initialPaymentReference,
+          initialPaymentSource: initialPaymentSource,
+        );
+        online = true;
+        _connectRealtimeChannel();
+        if (authToken != null && authToken!.isNotEmpty) {
+          unawaited(
+            _messagingService
+                .registerTokenSync(authToken: authToken!)
+                .catchError((e) {
+                  debugPrint('FCM token registration skipped: $e');
+                }),
+          );
+        }
+        await loadDashboard();
+        _startRequestRefresh();
+      } on ApiException catch (e) {
+        if (e.code == 'INITIAL_PAYMENT_REQUIRED' || e.statusCode == 403) {
+          initialPaymentStatus = 'NOT_PAID';
+          online = false;
+          deliveryPerson = deliveryPerson?.copyWith(
+            isOnline: false,
+            initialPaymentStatus: 'NOT_PAID',
+            isPaymentRequired: true,
+          );
+        }
+        rethrow;
+      }
     });
   }
 
@@ -465,20 +696,7 @@ class DeliveryProvider extends ChangeNotifier {
       _stopRequestRefresh();
       _stopLiveLocationTracking();
       online = false;
-      deliveryPerson = DeliveryPersonModel(
-        id: deliveryPerson!.id,
-        name: deliveryPerson!.name,
-        phone: deliveryPerson!.phone,
-        vehicleNumber: deliveryPerson!.vehicleNumber,
-        status: deliveryPerson!.status,
-        isOnline: false,
-        active: deliveryPerson!.active,
-        completedOrders: deliveryPerson!.completedOrders,
-        todayEarnings: deliveryPerson!.todayEarnings,
-        avatarUrl: deliveryPerson!.avatarUrl,
-        licenseNumber: deliveryPerson!.licenseNumber,
-        licenseCardUrl: deliveryPerson!.licenseCardUrl,
-      );
+      deliveryPerson = deliveryPerson!.copyWith(isOnline: false);
     });
   }
 
@@ -501,6 +719,12 @@ class DeliveryProvider extends ChangeNotifier {
       notifyListeners();
       return null;
     } on ApiException catch (e) {
+      if (e.code == 'INITIAL_PAYMENT_REQUIRED' || e.statusCode == 403) {
+        initialPaymentStatus = 'NOT_PAID';
+        online = false;
+        notifyListeners();
+        return 'Initial payment is required before accepting orders.';
+      }
       if (e.statusCode == 409) {
         return 'Order already accepted by another delivery person.';
       }
@@ -595,6 +819,15 @@ class DeliveryProvider extends ChangeNotifier {
     authToken = null;
     authUser = null;
     online = false;
+    initialPaymentLoading = false;
+    initialPaymentVerifying = false;
+    initialPaymentError = null;
+    initialPaymentAmount = 500.0;
+    initialPaymentStatus = 'NOT_PAID';
+    initialPaymentCompletedAt = null;
+    initialPaymentMethod = null;
+    initialPaymentReference = null;
+    initialPaymentSource = null;
     _stopRequestRefresh();
     _stopLiveLocationTracking();
 
@@ -632,7 +865,7 @@ class DeliveryProvider extends ChangeNotifier {
     _requestRefreshTimer = Timer.periodic(const Duration(seconds: 8), (
       _,
     ) async {
-      if (!online || deliveryPerson == null) return;
+      if (!online || deliveryPerson == null || isInitialPaymentRequired) return;
       try {
         final available = await apiService.fetchAvailableOrders(
           deliveryPersonId: deliveryPerson!.id,
@@ -652,6 +885,13 @@ class DeliveryProvider extends ChangeNotifier {
           }
         }
         if (changed) notifyListeners();
+      } on ApiException catch (e) {
+        if (e.code == 'INITIAL_PAYMENT_REQUIRED' || e.statusCode == 403) {
+          initialPaymentStatus = 'NOT_PAID';
+          pendingRequests.clear();
+          online = false;
+          notifyListeners();
+        }
       } catch (_) {
         // Keep the live socket flow as the primary source; polling is only a fallback.
       }
@@ -855,6 +1095,163 @@ class DeliveryProvider extends ChangeNotifier {
               : null);
     }
     return null;
+  }
+
+  Future<void> syncInitialPaymentStatus({bool notify = true}) async {
+    if (authToken == null) return;
+    try {
+      final res = await apiService.fetchInitialPaymentStatus(token: authToken);
+      final status =
+          res['initialPaymentStatus'] as String? ??
+          (res['isPaymentRequired'] == false ? 'PAID' : 'NOT_PAID');
+      initialPaymentStatus = status;
+      if (res['initialPaymentAmount'] != null) {
+        initialPaymentAmount = (res['initialPaymentAmount'] as num).toDouble();
+      }
+      if (res['completedAt'] != null) {
+        initialPaymentCompletedAt = DateTime.tryParse(
+          res['completedAt'].toString(),
+        );
+      } else if (res['initialPaymentCompletedAt'] != null) {
+        initialPaymentCompletedAt = DateTime.tryParse(
+          res['initialPaymentCompletedAt'].toString(),
+        );
+      }
+      initialPaymentMethod =
+          res['paymentMethod'] as String? ??
+          res['initialPaymentMethod'] as String?;
+      initialPaymentReference =
+          res['reference'] as String? ??
+          res['initialPaymentReference'] as String?;
+      initialPaymentSource =
+          res['source'] as String? ?? res['initialPaymentSource'] as String?;
+
+      if (deliveryPerson != null) {
+        deliveryPerson = deliveryPerson!.copyWith(
+          initialPaymentStatus: initialPaymentStatus,
+          isPaymentRequired: isInitialPaymentRequired,
+          initialPaymentAmount: initialPaymentAmount,
+          initialPaymentCompletedAt: initialPaymentCompletedAt,
+          initialPaymentMethod: initialPaymentMethod,
+          initialPaymentReference: initialPaymentReference,
+          initialPaymentSource: initialPaymentSource,
+        );
+      }
+      if (notify) notifyListeners();
+    } catch (e) {
+      debugPrint('syncInitialPaymentStatus skipped: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> initiateInitialPayment() async {
+    initialPaymentLoading = true;
+    initialPaymentError = null;
+    notifyListeners();
+    try {
+      final res = await apiService.initiateInitialPayment(token: authToken);
+      if (res['amount'] != null) {
+        initialPaymentAmount = (res['amount'] as num).toDouble();
+      }
+      return res;
+    } on ApiException catch (e) {
+      initialPaymentError = e.message;
+      rethrow;
+    } catch (e) {
+      initialPaymentError = e.toString().replaceFirst('Exception: ', '');
+      rethrow;
+    } finally {
+      initialPaymentLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> verifyInitialPayment(String orderId) async {
+    initialPaymentVerifying = true;
+    initialPaymentError = null;
+    notifyListeners();
+    try {
+      final res = await apiService.verifyInitialPayment(
+        orderId: orderId,
+        token: authToken,
+      );
+      final verified =
+          res['verified'] == true ||
+          res['paymentStatus'] == 'PAID' ||
+          res['paymentStatus'] == 'SUCCESS' ||
+          res['initialPaymentStatus'] == 'PAID';
+      if (verified) {
+        initialPaymentStatus = 'PAID';
+        if (res['amount'] != null) {
+          initialPaymentAmount = (res['amount'] as num).toDouble();
+        }
+        initialPaymentCompletedAt = DateTime.now();
+        if (deliveryPerson != null) {
+          deliveryPerson = deliveryPerson!.copyWith(
+            initialPaymentStatus: 'PAID',
+            isPaymentRequired: false,
+            initialPaymentAmount: initialPaymentAmount,
+            initialPaymentCompletedAt: initialPaymentCompletedAt,
+            isOnline: false,
+          );
+        }
+        online = false;
+        unawaited(refreshProfile());
+      }
+      return verified;
+    } on ApiException catch (e) {
+      initialPaymentError = e.message;
+      return false;
+    } catch (e) {
+      initialPaymentError = e.toString().replaceFirst('Exception: ', '');
+      return false;
+    } finally {
+      initialPaymentVerifying = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> simulateSandboxPayment(String orderId) async {
+    initialPaymentVerifying = true;
+    initialPaymentError = null;
+    notifyListeners();
+    try {
+      final res = await apiService.simulateSandboxPayment(
+        orderId: orderId,
+        token: authToken,
+      );
+      final verified =
+          res['verified'] == true ||
+          res['paymentStatus'] == 'PAID' ||
+          res['initialPaymentStatus'] == 'PAID';
+      if (verified) {
+        initialPaymentStatus = 'PAID';
+        if (res['amount'] != null) {
+          initialPaymentAmount = (res['amount'] as num).toDouble();
+        }
+        initialPaymentCompletedAt = DateTime.now();
+        if (deliveryPerson != null) {
+          deliveryPerson = deliveryPerson!.copyWith(
+            initialPaymentStatus: 'PAID',
+            isPaymentRequired: false,
+            initialPaymentAmount: initialPaymentAmount,
+            initialPaymentCompletedAt: initialPaymentCompletedAt,
+            isOnline: false,
+          );
+        }
+        online = false;
+        unawaited(refreshProfile());
+      }
+      return verified;
+    } on ApiException catch (e) {
+      initialPaymentError = e.message;
+      return false;
+    } catch (e) {
+      initialPaymentError = e.toString().replaceFirst('Exception: ', '');
+      return false;
+    } finally {
+      initialPaymentVerifying = false;
+      notifyListeners();
+    }
   }
 
   @override

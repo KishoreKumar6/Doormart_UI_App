@@ -23,7 +23,8 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
 
   @override
   Widget build(BuildContext context) {
-    final accepted = widget.order.status == DeliveryOrderStatus.accepted ||
+    final accepted =
+        widget.order.status == DeliveryOrderStatus.accepted ||
         widget.order.status == DeliveryOrderStatus.pickedUp ||
         widget.order.status == DeliveryOrderStatus.outForDelivery ||
         widget.order.status == DeliveryOrderStatus.delivered;
@@ -38,12 +39,16 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
                 Expanded(
                   child: Text(
                     'Order ${widget.order.displayOrderId}',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 _StatusBadge(
                   label: accepted ? 'Accepted' : 'Waiting',
-                  color: accepted ? const Color(0xFF0F9D58) : const Color(0xFFE8541A),
+                  color: accepted
+                      ? const Color(0xFF0F9D58)
+                      : const Color(0xFFE8541A),
                 ),
               ],
             ),
@@ -57,7 +62,9 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
             const SizedBox(height: 10),
             Text(
               'Ordered Items',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             ...widget.order.items.map(
@@ -68,12 +75,16 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
             ),
             const SizedBox(height: 4),
             const SizedBox(height: 4),
-            _SummaryLine(label: 'Order Amount', value: '₹${widget.order.totalAmount.toStringAsFixed(2)}'),
+            _SummaryLine(
+              label: 'Order Amount',
+              value: '₹${widget.order.totalAmount.toStringAsFixed(2)}',
+            ),
             _SummaryLine(label: 'Payment', value: widget.order.paymentType),
             if (widget.order.isCod)
               _SummaryLine(
                 label: 'COD Amount',
-                value: '₹${widget.order.codAmount?.toStringAsFixed(2) ?? widget.order.totalAmount.toStringAsFixed(2)}',
+                value:
+                    '₹${widget.order.codAmount?.toStringAsFixed(2) ?? widget.order.totalAmount.toStringAsFixed(2)}',
               ),
             const SizedBox(height: 12),
             Row(
@@ -89,7 +100,11 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
                   child: ElevatedButton(
                     onPressed: _busy ? null : _accept,
                     child: _busy
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Text('Accept'),
                   ),
                 ),
@@ -107,7 +122,9 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (message != null && message.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -117,7 +134,9 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (message != null && message.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 

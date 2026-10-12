@@ -6,10 +6,9 @@ import '../../../providers/app_state.dart';
 import '../providers/delivery_provider.dart';
 import '../widgets/delivery_sidebar_drawer.dart';
 import 'delivery_login_screen.dart';
-import 'delivery_history_screen.dart';
-import 'delivery_home_screen.dart';
 import 'delivery_status_details_screen.dart';
 import 'delivery_earnings_screen.dart';
+import 'delivery_initial_payment_screen.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const _kOrange = Color(0xFFE8541A);
@@ -35,9 +34,25 @@ class _DeliveryProfileScreenState extends State<DeliveryProfileScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final appState = context.read<AppState>();
       final provider = context.read<DeliveryProvider>();
+      if ((provider.authToken == null || provider.authToken!.isEmpty) &&
+          appState.token != null &&
+          appState.token!.isNotEmpty) {
+        provider.authToken = appState.token;
+      }
+      if (provider.authUser == null && appState.user != null) {
+        provider.authUser = appState.user!.toJson();
+      }
       await provider.bootstrap();
+      if (provider.deliveryPerson == null && appState.user != null) {
+        provider.hydrateFromSession(
+          token: provider.authToken ?? appState.token ?? '',
+          user: appState.user!,
+        );
+      }
       await provider.refreshProfile();
+      await provider.syncInitialPaymentStatus();
       await provider.loadStatusDetails();
     });
   }
@@ -130,9 +145,10 @@ class _DeliveryProfileScreenState extends State<DeliveryProfileScreen> {
 
                   const SizedBox(height: 20),
 
-                  // ── Shift status card ──────────────────────────────────
+                  // ── Work status card ───────────────────────────────────
                   _ShiftStatusCard(
                     online: provider.online,
+                    isPaymentRequired: provider.isInitialPaymentRequired,
                     activeSince: activeSince,
                   ),
 
@@ -486,11 +502,16 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-// ─── Shift Status Card ────────────────────────────────────────────────────────
+// ─── Work / Shift Status Card ─────────────────────────────────────────────────
 
 class _ShiftStatusCard extends StatelessWidget {
-  const _ShiftStatusCard({required this.online, required this.activeSince});
+  const _ShiftStatusCard({
+    required this.online,
+    this.isPaymentRequired = false,
+    required this.activeSince,
+  });
   final bool online;
+  final bool isPaymentRequired;
   final String activeSince;
 
   @override
@@ -515,7 +536,7 @@ class _ShiftStatusCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Shift Status',
+                  'Work Status',
                   style: TextStyle(
                     fontSize: 12,
                     color: _kTextMid,
@@ -524,7 +545,7 @@ class _ShiftStatusCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  online ? 'Online' : 'Offline',
+                  online ? 'Active' : 'Inactive',
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
@@ -538,19 +559,33 @@ class _ShiftStatusCard extends StatelessWidget {
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: online ? const Color(0xFF22C55E) : Colors.grey,
+                        color: online
+                            ? const Color(0xFF22C55E)
+                            : (isPaymentRequired
+                                  ? const Color(0xFFDC2626)
+                                  : Colors.grey),
                         shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      online
-                          ? 'Active since $activeSince'
-                          : 'Currently offline',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: online ? _kOrange : _kTextMid,
+                    Flexible(
+                      child: Text(
+                        online
+                            ? 'Active since $activeSince'
+                            : (isPaymentRequired
+                                  ? 'Payment required to work'
+                                  : 'Currently off duty'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: online
+                              ? const Color(0xFF22C55E)
+                              : (isPaymentRequired
+                                    ? const Color(0xFFDC2626)
+                                    : _kTextMid),
+                        ),
                       ),
                     ),
                   ],
@@ -563,12 +598,12 @@ class _ShiftStatusCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: _kOrangeLight,
+              color: online ? const Color(0xFFECFDF5) : _kOrangeLight,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.wifi_tethering_rounded,
-              color: _kOrange,
+              color: online ? const Color(0xFF22C55E) : _kOrange,
               size: 24,
             ),
           ),
@@ -719,13 +754,18 @@ class _StatItem extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: large ? 24 : 22,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-              letterSpacing: -0.5,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: large ? 24 : 22,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: -0.5,
+              ),
             ),
           ),
         ],
@@ -742,8 +782,22 @@ class _AccountSettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.read<DeliveryProvider>();
+    final provider = context.watch<DeliveryProvider>();
+    final isPaid = provider.isInitialPaymentPaid;
+    final amount = provider.initialPaymentAmount;
+    final displayAmount = amount > 0 ? amount.toStringAsFixed(0) : '500';
+
     final items = [
+      _SettingItem(
+        icon: Icons.payments_rounded,
+        label: 'Partner Onboarding Fee',
+        subtitle: isPaid
+            ? 'Verified & Paid (₹$displayAmount)'
+            : 'Payment Required • ₹$displayAmount',
+        onTap: () => Navigator.of(
+          context,
+        ).pushNamed(DeliveryInitialPaymentScreen.routeName),
+      ),
       _SettingItem(
         icon: Icons.phone_rounded,
         label: 'Phone Number',
@@ -1142,6 +1196,8 @@ class _SettingRowState extends State<_SettingRow>
                         const SizedBox(height: 2),
                         Text(
                           widget.item.subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,
                             color: _kTextMid,

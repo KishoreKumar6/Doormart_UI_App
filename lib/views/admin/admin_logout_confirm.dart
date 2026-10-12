@@ -5,7 +5,11 @@ Future<bool> confirmAdminLogout(BuildContext context) async {
     context: context,
     builder: (dialogContext) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      icon: const Icon(Icons.logout_rounded, color: Color(0xFFE8541A), size: 40),
+      icon: const Icon(
+        Icons.logout_rounded,
+        color: Color(0xFFE8541A),
+        size: 40,
+      ),
       title: const Text(
         'Logout',
         style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A)),
@@ -18,12 +22,17 @@ Future<bool> confirmAdminLogout(BuildContext context) async {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialogContext, false),
-          child: const Text('Cancel', style: TextStyle(color: Color(0xFF9E9E9E))),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(color: Color(0xFF9E9E9E)),
+          ),
         ),
         FilledButton(
           style: FilledButton.styleFrom(
             backgroundColor: const Color(0xFFE8541A),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
           onPressed: () => Navigator.pop(dialogContext, true),
           child: const Text('Logout'),

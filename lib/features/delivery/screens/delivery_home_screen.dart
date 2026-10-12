@@ -3,12 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/app_state.dart';
-import '../../../models/user_model.dart';
+import '../../../services/api_service.dart';
 import '../providers/delivery_provider.dart';
 import 'active_order_screen.dart';
 import 'delivery_history_screen.dart';
 import 'delivery_earnings_screen.dart';
 import 'delivery_profile_screen.dart';
+import 'delivery_initial_payment_screen.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const _kOrange = Color(0xFFE8541A);
@@ -29,24 +30,92 @@ class DeliveryHomeScreen extends StatefulWidget {
 
 class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   _MetricRange _range = _MetricRange.today;
+  bool _isCheckingPayment = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final appState = context.read<AppState>();
       final provider = context.read<DeliveryProvider>();
+      if ((provider.authToken == null || provider.authToken!.isEmpty) &&
+          appState.token != null &&
+          appState.token!.isNotEmpty) {
+        provider.authToken = appState.token;
+      }
+      if (provider.authUser == null && appState.user != null) {
+        provider.authUser = appState.user!.toJson();
+      }
       await provider.bootstrap();
-      if (provider.deliveryPerson == null &&
-          provider.authToken != null &&
-          provider.authUser != null) {
+      if (provider.deliveryPerson == null && appState.user != null) {
         provider.hydrateFromSession(
-          token: provider.authToken!,
-          user: UserModel.fromJson(provider.authUser!),
+          token: provider.authToken ?? appState.token ?? '',
+          user: appState.user!,
         );
       }
       await provider.syncOnlineState();
+      await provider.syncInitialPaymentStatus();
       await provider.loadDashboard();
     });
+  }
+
+  void _showInitialPaymentRequiredDialog(BuildContext context, double amount) {
+    final displayAmount = amount > 0 ? amount.toStringAsFixed(0) : '500';
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        icon: Container(
+          width: 56,
+          height: 56,
+          decoration: const BoxDecoration(
+            color: _kOrangeLight,
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.payments_rounded, color: _kOrange, size: 30),
+        ),
+        title: const Text(
+          'Initial Payment Required',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            color: _kTextDark,
+            fontSize: 18,
+          ),
+        ),
+        content: Text(
+          'A one-time partner onboarding payment of ₹$displayAmount is required before you can go online and receive customer delivery orders.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: _kTextMid, fontSize: 14, height: 1.45),
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Later', style: TextStyle(color: _kTextMid)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: _kOrange,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              Navigator.of(
+                context,
+              ).pushNamed(DeliveryInitialPaymentScreen.routeName);
+            },
+            child: Text(
+              'Pay ₹$displayAmount Now',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -55,9 +124,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
     final appState = context.watch<AppState>();
     final provider = context.watch<DeliveryProvider>();
     final person = provider.deliveryPerson;
-    final approvalStatus = (appState.user?.approvalStatus ?? 'approved')
-        .toLowerCase();
-    final canSeeRequests = person?.active ?? false;
+    final approvalStatus = (appState.user?.approvalStatus ?? 'approved');
     final stats = provider.earningsStats;
     final completed = _completedOrdersForRange(stats, _range);
     final earnings = _earningsForRange(stats, _range);
@@ -147,15 +214,99 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 100 + bottomInset),
         children: [
-          // ── Profile card ─────────────────────────────────────────────
+          // ── Initial Payment Section ─────────────────────────────────────
+          if (provider.isInitialPaymentRequired) ...[
+            _InitialPaymentRequiredCard(
+              amount: provider.initialPaymentAmount,
+              isChecking: _isCheckingPayment,
+              onPayTap: () {
+                Navigator.of(
+                  context,
+                ).pushNamed(DeliveryInitialPaymentScreen.routeName);
+              },
+              onVerifyTap: () async {
+                setState(() => _isCheckingPayment = true);
+                try {
+                  await provider.syncInitialPaymentStatus();
+                  if (!mounted) return;
+                  if (provider.isInitialPaymentPaid) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Payment verified successfully! You are eligible to work.',
+                        ),
+                      ),
+                    );
+                    await provider.loadDashboard();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Payment not verified yet. If you completed payment, please try again in a few moments.',
+                        ),
+                      ),
+                    );
+                  }
+                } finally {
+                  if (mounted) setState(() => _isCheckingPayment = false);
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+          ] else ...[
+            _InitialPaymentPaidCard(
+              amount: provider.initialPaymentAmount,
+              completedAt: provider.initialPaymentCompletedAt,
+              onViewTap: () {
+                Navigator.of(
+                  context,
+                ).pushNamed(DeliveryInitialPaymentScreen.routeName);
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Work Status & Profile Card ────────────────────────────────
           _ProfileCard(
             name: person?.name ?? 'Delivery Partner',
             deliveryId: _shortId(person?.id),
             imageUrl: person?.avatarUrl ?? '',
             online: provider.online,
-            onToggle: (v) {
+            isPaymentRequired: provider.isInitialPaymentRequired,
+            onToggle: (v) async {
               HapticFeedback.lightImpact();
-              v ? provider.goOnline() : provider.goOffline();
+              if (v && provider.isInitialPaymentRequired) {
+                _showInitialPaymentRequiredDialog(
+                  context,
+                  provider.initialPaymentAmount,
+                );
+                return;
+              }
+              try {
+                if (v) {
+                  await provider.goOnline();
+                } else {
+                  await provider.goOffline();
+                }
+              } on ApiException catch (e) {
+                if (!context.mounted) return;
+                if (e.code == 'INITIAL_PAYMENT_REQUIRED' ||
+                    e.statusCode == 403) {
+                  _showInitialPaymentRequiredDialog(
+                    context,
+                    provider.initialPaymentAmount,
+                  );
+                } else {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(e.message)));
+                }
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(e.toString())));
+              }
             },
           ),
 
@@ -202,95 +353,88 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
           const SizedBox(height: 24),
 
           // ── New Requests ──────────────────────────────────────────────
-          if (canSeeRequests) ...[
-            Row(
-              children: [
-                const Text(
-                  'New Requests',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: _kTextDark,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                if (provider.pendingRequests.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _kOrangeLight,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '${provider.pendingRequests.length} Nearby',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: _kOrange,
-                      ),
-                    ),
-                  ),
-                const Spacer(),
-                // TextButton(
-                //   onPressed: () {},
-                //   style: TextButton.styleFrom(
-                //     foregroundColor: _kOrange,
-                //     padding: EdgeInsets.zero,
-                //     minimumSize: Size.zero,
-                //     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                //   ),
-                //   child: const Text(
-                //     'View All',
-                //     style: TextStyle(fontWeight: FontWeight.w700),
-                //   ),
-                // ),
-              ],
-            ),
-
-            const SizedBox(height: 15),
-
-            if (provider.online && provider.pendingRequests.isEmpty)
-              _EmptyState(
-                icon: Icons.inbox_rounded,
-                message: 'No new requests right now',
-              )
-            else if (!provider.online)
-              const _EmptyState(
-                icon: Icons.wifi_off_rounded,
-                message: 'Go online to receive requests',
-              )
-            else
-              SizedBox(
-                height: 430,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: provider.pendingRequests.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
-                  itemBuilder: (context, i) {
-                    final order = provider.pendingRequests[i];
-                    return SizedBox(
-                      width: MediaQuery.of(context).size.width - 64,
-                      child: _NewRequestCard(
-                        order: order,
-                        onAccept: () {
-                          HapticFeedback.mediumImpact();
-                          provider.acceptOrder(order);
-                        },
-                        onReject: () => provider.rejectOrder(order),
-                      ),
-                    );
-                  },
+          Row(
+            children: [
+              const Text(
+                'New Requests',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: _kTextDark,
                 ),
               ),
-          ] else ...[
+              const SizedBox(width: 10),
+              if (provider.online && provider.pendingRequests.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _kOrangeLight,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${provider.pendingRequests.length} Nearby',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _kOrange,
+                    ),
+                  ),
+                ),
+              const Spacer(),
+            ],
+          ),
+
+          const SizedBox(height: 15),
+
+          if (approvalStatus != 'approved')
             const _EmptyState(
-              icon: Icons.lock_outline_rounded,
-              message: 'Inactive delivery persons cannot receive requests',
+              icon: Icons.hourglass_top_rounded,
+              message:
+                  'Your delivery partner account is pending admin approval',
+            )
+          else if (provider.isInitialPaymentRequired)
+            _EmptyState(
+              icon: Icons.payments_rounded,
+              message:
+                  'Complete your one-time onboarding payment to start working and receive delivery orders',
+            )
+          else if (!provider.online)
+            const _EmptyState(
+              icon: Icons.pause_circle_outline_rounded,
+              message:
+                  'You are currently Inactive. Turn on Work Status to start receiving requests.',
+            )
+          else if (provider.pendingRequests.isEmpty)
+            const _EmptyState(
+              icon: Icons.inbox_rounded,
+              message: 'No new requests right now',
+            )
+          else
+            SizedBox(
+              height: 430,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: provider.pendingRequests.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, i) {
+                  final order = provider.pendingRequests[i];
+                  return SizedBox(
+                    width: MediaQuery.of(context).size.width - 64,
+                    child: _NewRequestCard(
+                      order: order,
+                      onAccept: () {
+                        HapticFeedback.mediumImpact();
+                        provider.acceptOrder(order);
+                      },
+                      onReject: () => provider.rejectOrder(order),
+                    ),
+                  );
+                },
+              ),
             ),
-          ],
 
           const SizedBox(height: 24),
 
@@ -336,6 +480,7 @@ class _ProfileCard extends StatelessWidget {
     required this.deliveryId,
     required this.imageUrl,
     required this.online,
+    this.isPaymentRequired = false,
     required this.onToggle,
   });
 
@@ -343,6 +488,7 @@ class _ProfileCard extends StatelessWidget {
   final String deliveryId;
   final String imageUrl;
   final bool online;
+  final bool isPaymentRequired;
   final ValueChanged<bool> onToggle;
 
   @override
@@ -427,9 +573,9 @@ class _ProfileCard extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Duty status toggle
+          // Work status toggle
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: _kBg,
               borderRadius: BorderRadius.circular(14),
@@ -437,25 +583,68 @@ class _ProfileCard extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Duty Status',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: _kTextDark,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Work Status',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _kTextDark,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        online
+                            ? 'Active • Ready for orders'
+                            : (isPaymentRequired
+                                  ? 'Inactive • Payment required'
+                                  : 'Inactive • Off duty'),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: online
+                              ? _kGreen
+                              : (isPaymentRequired
+                                    ? const Color(0xFFDC2626)
+                                    : _kTextMid),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 200),
-                      child: Text(
-                        online ? 'ONLINE' : 'OFFLINE',
-                        key: ValueKey(online),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: online ? _kOrange : _kTextMid,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: online
+                              ? const Color(0xFFECFDF5)
+                              : (isPaymentRequired
+                                    ? const Color(0xFFFEE2E2)
+                                    : const Color(0xFFF3F4F6)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          online ? 'ACTIVE' : 'INACTIVE',
+                          key: ValueKey(online),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: online
+                                ? _kGreen
+                                : (isPaymentRequired
+                                      ? const Color(0xFFDC2626)
+                                      : _kTextMid),
+                          ),
                         ),
                       ),
                     ),
@@ -465,8 +654,8 @@ class _ProfileCard extends StatelessWidget {
                       child: Switch.adaptive(
                         value: online,
                         onChanged: onToggle,
-                        activeColor: _kOrange,
-                        activeTrackColor: _kOrange.withValues(alpha: 0.25),
+                        activeThumbColor: _kGreen,
+                        activeTrackColor: _kGreen.withValues(alpha: 0.25),
                       ),
                     ),
                   ],
@@ -561,13 +750,18 @@ class _MetricCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: largeValue ? 24 : 28,
-              fontWeight: FontWeight.w900,
-              color: _kOrange,
-              height: 1,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: largeValue ? 24 : 28,
+                fontWeight: FontWeight.w900,
+                color: _kOrange,
+                height: 1,
+              ),
             ),
           ),
           const SizedBox(height: 4),
@@ -771,6 +965,8 @@ class _NewRequestCardState extends State<_NewRequestCard> {
                   children: [
                     Text(
                       _text(widget.order.customerName, fallback: 'Customer'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -780,6 +976,8 @@ class _NewRequestCardState extends State<_NewRequestCard> {
                     const SizedBox(height: 3),
                     Text(
                       _text(widget.order.customerPhone, fallback: '—'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -788,18 +986,20 @@ class _NewRequestCardState extends State<_NewRequestCard> {
                     ),
                     Text(
                       '${_requestItems(widget.order).length} items • ${_text(widget.order.customerArea, fallback: 'Unknown area')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 12, color: _kTextMid),
                     ),
                   ],
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               TextButton(
                 onPressed: () => _showItemsSheet(context),
                 style: TextButton.styleFrom(
                   foregroundColor: _kOrange,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
+                    horizontal: 10,
                     vertical: 8,
                   ),
                   minimumSize: Size.zero,
@@ -1523,6 +1723,281 @@ class _MapGridPainter extends CustomPainter {
   bool shouldRepaint(_) => false;
 }
 
+// ─── Initial Payment Required Card ──────────────────────────────────────────
+
+class _InitialPaymentRequiredCard extends StatelessWidget {
+  const _InitialPaymentRequiredCard({
+    required this.amount,
+    required this.onPayTap,
+    required this.onVerifyTap,
+    this.isChecking = false,
+  });
+
+  final double amount;
+  final VoidCallback onPayTap;
+  final VoidCallback onVerifyTap;
+  final bool isChecking;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayAmount = amount > 0 ? amount.toStringAsFixed(0) : '500';
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _kCard,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFFFD8CC)),
+        boxShadow: [
+          BoxShadow(
+            color: _kOrange.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  color: _kOrangeLight,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.payments_rounded,
+                  color: _kOrange,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Initial Payment Required',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: _kTextDark,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Pay ₹$displayAmount onboarding fee to unlock orders',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: _kTextMid,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'UNPAID',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFFDC2626),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Order requests and online dispatch are locked until the initial partner fee is verified.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: _kTextDark.withValues(alpha: 0.75),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onPayTap,
+              icon: const Icon(Icons.lock_open_rounded, size: 18),
+              label: Text(
+                'Complete Payment (₹$displayAmount)',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kOrange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton.icon(
+              onPressed: isChecking ? null : onVerifyTap,
+              icon: isChecking
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _kOrange,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.refresh_rounded,
+                      size: 16,
+                      color: _kOrange,
+                    ),
+              label: Text(
+                isChecking
+                    ? 'Checking verification...'
+                    : 'Already paid? Check verification status',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _kOrange,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Initial Payment Paid Card ──────────────────────────────────────────────
+
+class _InitialPaymentPaidCard extends StatelessWidget {
+  const _InitialPaymentPaidCard({
+    required this.amount,
+    this.completedAt,
+    required this.onViewTap,
+  });
+
+  final double amount;
+  final DateTime? completedAt;
+  final VoidCallback onViewTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayAmount = amount > 0 ? amount.toStringAsFixed(0) : '500';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: _kCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD1FAE5)),
+        boxShadow: [
+          BoxShadow(
+            color: _kGreen.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: const BoxDecoration(
+              color: Color(0xFFECFDF5),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_circle_rounded,
+              color: _kGreen,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 2,
+                  children: [
+                    const Text(
+                      'Initial Payment',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: _kTextDark,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD1FAE5),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'PAID',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          color: _kGreen,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '₹$displayAmount • Eligible to work',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: _kTextMid,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onViewTap,
+            style: TextButton.styleFrom(
+              foregroundColor: _kOrange,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text(
+              'Details',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Delivery Sidebar ─────────────────────────────────────────────────────────
 
 class _DeliverySidebarDrawer extends StatelessWidget {
@@ -1543,6 +2018,7 @@ class _DeliverySidebarDrawer extends StatelessWidget {
       DeliveryHistoryScreen.routeName => 'History',
       DeliveryEarningsScreen.routeName => 'Earnings',
       DeliveryProfileScreen.routeName => 'Profile',
+      DeliveryInitialPaymentScreen.routeName => 'Initial Payment',
       _ => 'Home',
     };
 
@@ -1598,7 +2074,7 @@ class _DeliverySidebarDrawer extends StatelessWidget {
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
-                          provider.online ? 'ONLINE' : 'OFFLINE',
+                          provider.online ? 'ACTIVE' : 'INACTIVE',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
@@ -1665,6 +2141,20 @@ class _DeliverySidebarDrawer extends StatelessWidget {
                     selected: currentRoute == DeliveryProfileScreen.routeName,
                     onTap: () => _go(context, DeliveryProfileScreen.routeName),
                   ),
+                  _DrawerItem(
+                    icon: Icons.payments_rounded,
+                    label: 'Initial Payment',
+                    selected:
+                        currentRoute == DeliveryInitialPaymentScreen.routeName,
+                    badgeText: provider.isInitialPaymentPaid
+                        ? 'PAID'
+                        : 'REQUIRED',
+                    badgeColor: provider.isInitialPaymentPaid
+                        ? const Color(0xFF22C55E)
+                        : const Color(0xFFE8541A),
+                    onTap: () =>
+                        _go(context, DeliveryInitialPaymentScreen.routeName),
+                  ),
                 ],
               ),
             ),
@@ -1687,6 +2177,8 @@ class _DeliverySidebarDrawer extends StatelessWidget {
       ).push(MaterialPageRoute(builder: (_) => const DeliveryEarningsScreen()));
     } else if (route == DeliveryProfileScreen.routeName) {
       Navigator.of(context).pushNamed(route);
+    } else if (route == DeliveryInitialPaymentScreen.routeName) {
+      Navigator.of(context).pushNamed(route);
     }
   }
 }
@@ -1697,12 +2189,16 @@ class _DrawerItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.badgeText,
+    this.badgeColor,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final String? badgeText;
+  final Color? badgeColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1763,6 +2259,33 @@ class _DrawerItem extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (badgeText != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (badgeColor ?? const Color(0xFFE8541A)).withValues(
+                        alpha: 0.2,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: (badgeColor ?? const Color(0xFFE8541A))
+                            .withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: Text(
+                      badgeText!,
+                      style: TextStyle(
+                        color: badgeColor ?? const Color(0xFFE8541A),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Icon(
                   Icons.chevron_right_rounded,
                   color: Colors.white.withValues(alpha: 0.7),

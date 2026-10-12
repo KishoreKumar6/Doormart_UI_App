@@ -1117,7 +1117,8 @@ class AppState extends ChangeNotifier {
     }
     if (routeName == '/delivery/login' ||
         routeName == '/delivery/register' ||
-        routeName == '/delivery/status') {
+        routeName == '/delivery/status' ||
+        routeName == '/delivery/payment') {
       return true;
     }
     return RoleAccess.canAccessRoute(user?.role, routeName);
@@ -1977,6 +1978,67 @@ class AppState extends ChangeNotifier {
             )
             as List<dynamic>;
     return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> updateDeliveryPaymentStatus({
+    required String deliveryPersonId,
+    required String status,
+    num? amount,
+    String? reference,
+    String? notes,
+  }) async {
+    if (token == null ||
+        (user?.role != UserRoles.admin && user?.role != UserRoles.superAdmin)) {
+      throw StateError('Admin login required');
+    }
+    final safeId = Uri.encodeComponent(deliveryPersonId.trim());
+    final payload = <String, dynamic>{
+      'status': status,
+      if (amount != null) 'amount': amount,
+      if (reference != null && reference.trim().isNotEmpty)
+        'reference': reference.trim(),
+      if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+    };
+    final data = await apiService.patch(
+      '/admin/delivery/$safeId/payment-status',
+      body: payload,
+      token: token,
+    );
+    notifyListeners();
+    return data is Map<String, dynamic> ? data : <String, dynamic>{};
+  }
+
+  Future<num> getDeliveryInitialPaymentSetting() async {
+    if (token == null) return 500;
+    try {
+      final res = await apiService.get(
+        '/admin/settings/delivery-initial-payment',
+        token: token,
+      );
+      if (res is Map<String, dynamic>) {
+        final amount = res['amount'] ?? res['value'];
+        if (amount is num) return amount;
+      }
+      return 500;
+    } catch (e) {
+      debugPrint('[AppState] Failed to get initial payment setting: $e');
+      return 500;
+    }
+  }
+
+  Future<Map<String, dynamic>> updateDeliveryInitialPaymentSetting(
+    num amount,
+  ) async {
+    if (token == null || user?.role != UserRoles.superAdmin) {
+      throw StateError('Super Admin login required');
+    }
+    final res = await apiService.patch(
+      '/admin/settings/delivery-initial-payment',
+      body: {'amount': amount},
+      token: token,
+    );
+    notifyListeners();
+    return res is Map<String, dynamic> ? res : <String, dynamic>{};
   }
 
   Future<UserModel> updateAdminUserRole(String userId, String role) async {

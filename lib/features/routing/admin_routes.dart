@@ -16,7 +16,8 @@ class AdminRoutes {
   static Map<String, WidgetBuilder> get routes => {
     AdminLoginScreen.routeName: (_) => const AdminLoginScreen(),
     AdminDashboardScreen.routeName: (_) => const AdminDashboardScreen(),
-    HelpSupportManagementScreen.routeName: (_) => const HelpSupportManagementScreen(),
+    HelpSupportManagementScreen.routeName: (_) =>
+        const HelpSupportManagementScreen(),
     AdminOrdersScreen.routeName: (_) => const AdminOrdersScreen(),
     AdminNotificationsScreen.routeName: (_) => const AdminNotificationsScreen(),
     ManageProductsScreen.routeName: (_) => const ManageProductsScreen(),
