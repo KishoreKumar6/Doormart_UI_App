@@ -29,9 +29,7 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
 
   // Distance & Basic Pricing
   late final TextEditingController _fallbackFeeController;
-  late final TextEditingController _baseDistanceController;
   late final TextEditingController _baseChargeController;
-  late final TextEditingController _perKmController;
   bool _distanceBasedDelivery = false;
 
   // Free Delivery
@@ -40,7 +38,6 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
 
   // Shift Pricing
   bool _shiftChargesEnabled = false;
-  late final TextEditingController _dayChargeController;
   late final TextEditingController _nightChargeController;
   late final TextEditingController _dayShiftStartController;
   late final TextEditingController _dayShiftEndController;
@@ -53,13 +50,10 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
   void initState() {
     super.initState();
     _fallbackFeeController = TextEditingController();
-    _baseDistanceController = TextEditingController();
     _baseChargeController = TextEditingController();
-    _perKmController = TextEditingController();
 
     _freeDeliveryThresholdController = TextEditingController();
 
-    _dayChargeController = TextEditingController();
     _nightChargeController = TextEditingController();
     _dayShiftStartController = TextEditingController();
     _dayShiftEndController = TextEditingController();
@@ -70,11 +64,8 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
   @override
   void dispose() {
     _fallbackFeeController.dispose();
-    _baseDistanceController.dispose();
     _baseChargeController.dispose();
-    _perKmController.dispose();
     _freeDeliveryThresholdController.dispose();
-    _dayChargeController.dispose();
     _nightChargeController.dispose();
     _dayShiftStartController.dispose();
     _dayShiftEndController.dispose();
@@ -97,17 +88,13 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
   void _populateFromState(AppState state) {
     _fallbackFeeController.text = state.deliveryChargeAmount.toStringAsFixed(0);
     _distanceBasedDelivery = state.distanceBasedDelivery;
-    _baseDistanceController.text =
-        state.deliveryBaseDistanceKm.toStringAsFixed(0);
-    _baseChargeController.text = state.deliveryBaseCharge.toStringAsFixed(0);
-    _perKmController.text = state.deliveryPerKmCharge.toStringAsFixed(0);
+    _baseChargeController.text = state.deliveryBaseCharge.toStringAsFixed(2);
 
     _freeDeliveryEnabled = state.freeDeliveryEnabled;
-    _freeDeliveryThresholdController.text =
-        state.freeDeliveryThreshold.toStringAsFixed(0);
+    _freeDeliveryThresholdController.text = state.freeDeliveryThreshold
+        .toStringAsFixed(0);
 
     _shiftChargesEnabled = state.shiftChargesEnabled;
-    _dayChargeController.text = state.dayDeliveryCharge.toStringAsFixed(0);
     _nightChargeController.text = state.nightDeliveryCharge.toStringAsFixed(0);
     _dayShiftStartController.text = state.dayShiftStart;
     _dayShiftEndController.text = state.dayShiftEnd;
@@ -119,13 +106,32 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
     return double.tryParse(clean) ?? fallback;
   }
 
+  Future<void> _pickShiftTime(TextEditingController controller) async {
+    final parts = controller.text.trim().split(':');
+    final initialTime = parts.length == 2
+        ? TimeOfDay(
+            hour: int.tryParse(parts[0]) ?? 0,
+            minute: int.tryParse(parts[1]) ?? 0,
+          )
+        : TimeOfDay.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      helpText: 'Select night surcharge window time',
+    );
+    if (!mounted || picked == null) return;
+    controller.text =
+        '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+    setState(() {});
+  }
+
   Future<void> _save() async {
     final fallbackFee = _cleanDouble(_fallbackFeeController.text, fallback: -1);
-    final baseDist = _cleanDouble(_baseDistanceController.text, fallback: -1);
     final baseCharge = _cleanDouble(_baseChargeController.text, fallback: -1);
-    final perKm = _cleanDouble(_perKmController.text, fallback: -1);
-    final freeThreshold = _cleanDouble(_freeDeliveryThresholdController.text, fallback: 0);
-    final dayCharge = _cleanDouble(_dayChargeController.text, fallback: -1);
+    final freeThreshold = _cleanDouble(
+      _freeDeliveryThresholdController.text,
+      fallback: 0,
+    );
     final nightCharge = _cleanDouble(_nightChargeController.text, fallback: -1);
     final dayStart = _dayShiftStartController.text.trim();
     final dayEnd = _dayShiftEndController.text.trim();
@@ -136,24 +142,12 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
       _showToast('Enter a valid non-negative fixed fallback fee');
       return;
     }
-    if (baseDist < 0) {
-      _showToast('Enter a valid non-negative base distance');
-      return;
-    }
     if (baseCharge < 0) {
-      _showToast('Enter a valid non-negative base charge');
-      return;
-    }
-    if (perKm < 0) {
-      _showToast('Enter a valid non-negative per-km charge');
+      _showToast('Enter a valid non-negative charge per km');
       return;
     }
     if (freeThreshold < 0) {
       _showToast('Enter a valid non-negative free delivery threshold');
-      return;
-    }
-    if (dayCharge < 0) {
-      _showToast('Enter a valid non-negative day shift charge');
       return;
     }
     if (nightCharge < 0) {
@@ -161,11 +155,11 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
       return;
     }
     if (!timeRegex.hasMatch(dayStart)) {
-      _showToast('Day shift start time must be in HH:mm format (e.g. 06:00)');
+      _showToast('Night shift start time must be in HH:mm format (e.g. 22:00)');
       return;
     }
     if (!timeRegex.hasMatch(dayEnd)) {
-      _showToast('Day shift end time must be in HH:mm format (e.g. 22:00)');
+      _showToast('Night shift end time must be in HH:mm format (e.g. 06:00)');
       return;
     }
 
@@ -177,13 +171,15 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
         // GST is configured per product, not in delivery-charge settings.
         gstPercent: state.gstPercent,
         distanceBasedDelivery: _distanceBasedDelivery,
-        deliveryBaseDistanceKm: baseDist,
+        deliveryBaseDistanceKm: 0,
         deliveryBaseCharge: baseCharge,
-        deliveryPerKmCharge: perKm,
+        deliveryPerKmCharge: 0,
         freeDeliveryEnabled: _freeDeliveryEnabled,
         freeDeliveryThreshold: freeThreshold,
         shiftChargesEnabled: _shiftChargesEnabled,
-        dayDeliveryCharge: dayCharge,
+        // Normal daytime pricing comes from the fixed or distance settings.
+        // The only shift surcharge is the configured night charge.
+        dayDeliveryCharge: state.dayDeliveryCharge,
         nightDeliveryCharge: nightCharge,
         dayShiftStart: dayStart,
         dayShiftEnd: dayEnd,
@@ -352,8 +348,7 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
   Widget _buildDistancePricingCard() {
     return _SectionCard(
       title: '2. Distance-based Charges',
-      subtitle:
-          'Configure base rates and per-kilometer pricing for delivery.',
+      subtitle: 'Configure base rates and per-kilometer pricing for delivery.',
       icon: Icons.social_distance_rounded,
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -368,6 +363,7 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
             String label, {
             String? prefix,
             String? suffix,
+            String? helper,
           }) {
             return SizedBox(
               width: itemWidth,
@@ -381,6 +377,7 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
                   labelText: label,
                   prefixText: prefix,
                   suffixText: suffix,
+                  helperText: helper,
                   filled: true,
                   fillColor: const Color(0xFFFAFAFA),
                   border: OutlineInputBorder(
@@ -409,9 +406,12 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
                 'Fixed fallback fee',
                 prefix: 'Rs ',
               ),
-              field(_baseDistanceController, 'Base distance', suffix: 'km'),
-              field(_baseChargeController, 'Base charge', prefix: 'Rs '),
-              field(_perKmController, 'Extra per km', prefix: 'Rs '),
+              field(
+                _baseChargeController,
+                'Charge per km',
+                prefix: 'Rs ',
+                helper: 'Distance × this rate = delivery fee',
+              ),
             ],
           );
         },
@@ -456,7 +456,8 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
               decoration: InputDecoration(
                 labelText: 'Free Delivery Threshold',
                 prefixText: 'Rs ',
-                helperText: 'Orders above or equal to this qualify for free delivery',
+                helperText:
+                    'Orders above or equal to this qualify for free delivery',
                 filled: true,
                 fillColor: const Color(0xFFFAFAFA),
                 border: OutlineInputBorder(
@@ -520,9 +521,9 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
 
   Widget _buildShiftChargesCard() {
     return _SectionCard(
-      title: '4. Shift-based Delivery Charges',
+      title: '4. Night Delivery Surcharge',
       subtitle:
-          'Optionally apply different delivery fees depending on delivery time window (Day Shift vs. Night Shift).',
+          'Normal delivery pricing applies during the day. Add an extra surcharge only for deliveries placed during the night window.',
       icon: Icons.access_time_filled_rounded,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -533,13 +534,13 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
             contentPadding: EdgeInsets.zero,
             activeThumbColor: _kOrange,
             title: const Text(
-              'Enable Shift-based Delivery Charges',
+              'Enable Night Shift Surcharge',
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
             ),
             subtitle: Text(
               _shiftChargesEnabled
-                  ? 'Active: Fees dynamically switch between Day & Night shift.'
-                  : 'Disabled: Standard fixed or distance rates apply all day.',
+                  ? 'Active: Night surcharge is added to the normal delivery fee.'
+                  : 'Disabled: Normal fixed or distance pricing applies all day.',
               style: TextStyle(color: _kTextMuted, fontSize: 13),
             ),
           ),
@@ -556,17 +557,23 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
                 String? prefix,
                 String? helper,
                 TextInputType? keyboardType,
+                bool timePicker = false,
               }) {
                 return SizedBox(
                   width: itemWidth,
                   child: TextField(
                     controller: controller,
                     keyboardType: keyboardType,
+                    readOnly: timePicker,
+                    onTap: timePicker ? () => _pickShiftTime(controller) : null,
                     onChanged: (val) => setState(() {}),
                     decoration: InputDecoration(
                       labelText: label,
                       prefixText: prefix,
                       helperText: helper,
+                      suffixIcon: timePicker
+                          ? const Icon(Icons.access_time_rounded)
+                          : null,
                       filled: true,
                       fillColor: const Color(0xFFFAFAFA),
                       border: OutlineInputBorder(
@@ -591,28 +598,25 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
                 runSpacing: 12,
                 children: [
                   field(
-                    _dayChargeController,
-                    'Day Shift Charge',
-                    prefix: 'Rs ',
-                    helper: 'Applied during day shift window',
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  ),
-                  field(
                     _nightChargeController,
-                    'Night Shift Charge',
+                    'Night Surcharge',
                     prefix: 'Rs ',
-                    helper: 'Applied during night shift window',
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    helper: 'Added to normal delivery pricing at night',
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                   ),
                   field(
                     _dayShiftStartController,
-                    'Day Shift Start (24h)',
-                    helper: 'e.g. 06:00 (6:00 AM)',
+                    'Night Shift Start (24h)',
+                    helper: 'e.g. 22:00 (10:00 PM)',
+                    timePicker: true,
                   ),
                   field(
                     _dayShiftEndController,
-                    'Day Shift End (24h)',
-                    helper: 'e.g. 22:00 (10:00 PM)',
+                    'Night Shift End (24h)',
+                    helper: 'e.g. 06:00 (6:00 AM)',
+                    timePicker: true,
                   ),
                 ],
               );
@@ -620,7 +624,7 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Shift Window Rule: Day Shift runs from ${_dayShiftStartController.text.trim()} to ${_dayShiftEndController.text.trim()}. Outside this window, Night Shift applies automatically.',
+            'Night surcharge applies from ${_dayShiftStartController.text.trim()} to ${_dayShiftEndController.text.trim()} (overnight times are supported).',
             style: TextStyle(
               fontSize: 12,
               fontStyle: FontStyle.italic,
@@ -634,15 +638,28 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
 
   Widget _buildCurrentConfigCard() {
     final state = context.watch<AppState>();
-    final liveFallback = _cleanDouble(_fallbackFeeController.text, fallback: state.deliveryChargeAmount);
-    final liveThreshold = _cleanDouble(_freeDeliveryThresholdController.text, fallback: state.freeDeliveryThreshold);
-    final liveDay = _cleanDouble(_dayChargeController.text, fallback: state.dayDeliveryCharge);
-    final liveNight = _cleanDouble(_nightChargeController.text, fallback: state.nightDeliveryCharge);
-    final liveBaseDist = _cleanDouble(_baseDistanceController.text, fallback: state.deliveryBaseDistanceKm);
-    final liveBaseCharge = _cleanDouble(_baseChargeController.text, fallback: state.deliveryBaseCharge);
-    final livePerKm = _cleanDouble(_perKmController.text, fallback: state.deliveryPerKmCharge);
-    final liveStart = _dayShiftStartController.text.trim().isEmpty ? state.dayShiftStart : _dayShiftStartController.text.trim();
-    final liveEnd = _dayShiftEndController.text.trim().isEmpty ? state.dayShiftEnd : _dayShiftEndController.text.trim();
+    final liveFallback = _cleanDouble(
+      _fallbackFeeController.text,
+      fallback: state.deliveryChargeAmount,
+    );
+    final liveThreshold = _cleanDouble(
+      _freeDeliveryThresholdController.text,
+      fallback: state.freeDeliveryThreshold,
+    );
+    final liveNight = _cleanDouble(
+      _nightChargeController.text,
+      fallback: state.nightDeliveryCharge,
+    );
+    final liveBaseCharge = _cleanDouble(
+      _baseChargeController.text,
+      fallback: state.deliveryBaseCharge,
+    );
+    final liveStart = _dayShiftStartController.text.trim().isEmpty
+        ? state.dayShiftStart
+        : _dayShiftStartController.text.trim();
+    final liveEnd = _dayShiftEndController.text.trim().isEmpty
+        ? state.dayShiftEnd
+        : _dayShiftEndController.text.trim();
 
     return _SectionCard(
       title: '5. Current Configuration (Live Values)',
@@ -669,7 +686,7 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
           _ConfigRow(
             label: 'Shift Pricing',
             value: _shiftChargesEnabled
-                ? 'Enabled (Day: Rs ${liveDay.toStringAsFixed(0)}, Night: Rs ${liveNight.toStringAsFixed(0)})'
+                ? 'Enabled (Night surcharge: Rs ${liveNight.toStringAsFixed(0)})'
                 : 'Disabled',
           ),
           if (_shiftChargesEnabled)
@@ -678,13 +695,8 @@ class _DeliveryChargesScreenState extends State<DeliveryChargesScreen> {
               value: '$liveStart - $liveEnd',
             ),
           _ConfigRow(
-            label: 'Distance Base Range',
-            value:
-                '${liveBaseDist.toStringAsFixed(0)} km @ Rs ${liveBaseCharge.toStringAsFixed(0)}',
-          ),
-          _ConfigRow(
-            label: 'Extra Per Km',
-            value: 'Rs ${livePerKm.toStringAsFixed(0)} / km',
+            label: 'Charge Per Km',
+            value: 'Rs ${liveBaseCharge.toStringAsFixed(2)} / km',
           ),
         ],
       ),
@@ -795,11 +807,7 @@ class _SectionCard extends StatelessWidget {
 }
 
 class _ConfigRow extends StatelessWidget {
-  const _ConfigRow({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
+  const _ConfigRow({required this.label, required this.value, this.valueColor});
 
   final String label;
   final String value;

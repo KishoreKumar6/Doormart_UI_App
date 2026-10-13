@@ -15,6 +15,7 @@ class ProductCard extends StatelessWidget {
     required this.isFavorite,
     this.onTap,
     this.imageFallbackBuilder,
+    this.showRating = false,
   });
 
   final ProductModel product;
@@ -24,6 +25,7 @@ class ProductCard extends StatelessWidget {
   final VoidCallback? onTap;
   final Widget Function(BuildContext context, ProductModel product)?
   imageFallbackBuilder;
+  final bool showRating;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +56,49 @@ class ProductCard extends StatelessWidget {
                       product: product,
                       imageFallbackBuilder: imageFallbackBuilder,
                     ),
+                    if (showRating)
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(999),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.star_rounded,
+                                size: 14,
+                                color: Color(0xFFF59E0B),
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                product.rating > 0
+                                    ? product.rating.toStringAsFixed(1)
+                                    : 'New',
+                                style: const TextStyle(
+                                  color: Color(0xFF142019),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     Positioned(
                       top: 10,
                       right: 10,

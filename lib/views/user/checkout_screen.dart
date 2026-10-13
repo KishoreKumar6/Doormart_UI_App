@@ -39,11 +39,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final state = context.read<AppState>();
+      // Refresh cart products so vendor pickup coordinates are available for
+      // distance-based delivery pricing.
+      await state.loadCart();
+      if (!mounted) return;
       await state.loadCheckoutSettings();
       if (!mounted) return;
       await state.loadAddresses();
       if (!mounted) return;
       _selectedAddressId = state.selectedAddress?.id;
+      // Never render a summary calculated for a previous address or cart.
+      state.checkoutSummary = null;
       _summaryFuture = state.loadCheckoutSummary(
         address: state.selectedAddress,
       );
@@ -177,6 +183,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   _selectedAddressId =
                                       state.selectedAddress?.id;
                                 });
+                                state.checkoutSummary = null;
                               }
                             },
                             icon: const Icon(Icons.add_rounded),
@@ -235,6 +242,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   onTap: () => setState(() {
                                     _selectedAddressId = addr.id;
                                     state.selectedAddress = addr;
+                                    state.checkoutSummary = null;
                                     _summaryFuture = state.loadCheckoutSummary(
                                       address: addr,
                                     );
@@ -261,8 +269,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             final subtotal =
                                 (summary?['subtotal'] as num?)?.toDouble() ??
                                 state.subtotal;
+                            final localDistanceFee = state
+                                .distanceBasedDeliveryFee(selectedAddress);
+                            final localDeliveryBreakdown = state
+                                .deliveryChargeBreakdown(selectedAddress);
+                            final deliveryDistance = state.cartDistanceKm(
+                              selectedAddress,
+                            );
                             final calculatedDeliveryFee =
-                                (summary?['calculatedDeliveryFee'] as num?)?.toDouble() ??
+                                localDistanceFee ??
+                                (summary?['calculatedDeliveryFee'] as num?)
+                                    ?.toDouble() ??
                                 (summary?['deliveryFee'] as num?)?.toDouble() ??
                                 state.calculatedDeliveryFee;
                             final gstAmount =
@@ -274,10 +291,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 calculatedDeliveryFee <= 0 ||
                                 (state.freeDeliveryEnabled &&
                                     (state.freeDeliveryThreshold <= 0 ||
-                                        subtotal >= state.freeDeliveryThreshold));
+                                        subtotal >=
+                                            state.freeDeliveryThreshold));
 
-                            final effectiveDeliveryFee =
-                                freeDeliveryUnlocked ? 0.0 : calculatedDeliveryFee;
+                            final effectiveDeliveryFee = freeDeliveryUnlocked
+                                ? 0.0
+                                : calculatedDeliveryFee;
                             final total =
                                 subtotal + effectiveDeliveryFee + gstAmount;
                             return _SummaryCard(
@@ -286,6 +305,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               deliveryFee: effectiveDeliveryFee,
                               gstAmount: gstAmount,
                               total: total,
+                              distanceKm: deliveryDistance,
+                              chargePerKm: state.deliveryBaseCharge,
+                              deliveryBreakdown: localDeliveryBreakdown,
                               freeDeliveryUnlocked: freeDeliveryUnlocked,
                               loading:
                                   snapshot.connectionState ==
@@ -616,6 +638,9 @@ class _SummaryCard extends StatelessWidget {
     required this.deliveryFee,
     required this.gstAmount,
     required this.total,
+    this.distanceKm,
+    this.chargePerKm,
+    this.deliveryBreakdown = const [],
     this.freeDeliveryUnlocked,
     this.loading = false,
   });
@@ -625,13 +650,17 @@ class _SummaryCard extends StatelessWidget {
   final double deliveryFee;
   final double gstAmount;
   final double total;
+  final double? distanceKm;
+  final double? chargePerKm;
+  final List<DeliveryChargeBreakdown> deliveryBreakdown;
   final bool? freeDeliveryUnlocked;
   final bool loading;
 
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final isFree = freeDeliveryUnlocked ??
+    final isFree =
+        freeDeliveryUnlocked ??
         (deliveryFee <= 0 ||
             appState.isFreeDelivery ||
             (appState.freeDeliveryEnabled &&
@@ -712,20 +741,48 @@ class _SummaryCard extends StatelessWidget {
           const SizedBox(height: 8),
           _SummaryRow(label: 'Subtotal', value: subtotal),
           const SizedBox(height: 10),
-          _SummaryRow(
-            label: 'Delivery fee',
-            value: effectiveDeliveryFee,
-            valueText: effectiveDeliveryFee <= 0 ? 'Rs 0.00' : null,
-            valueColor: effectiveDeliveryFee <= 0 ? const Color(0xFF16A34A) : null,
-          ),
+          if (deliveryBreakdown.length > 1) ...[
+            _SummaryRow(
+              label: 'Delivery fee (2 stores)',
+              value: effectiveDeliveryFee,
+              valueText: isFree ? 'Rs 0.00' : null,
+              valueColor: isFree ? const Color(0xFF16A34A) : null,
+            ),
+            const SizedBox(height: 6),
+            ...deliveryBreakdown.map(
+              (entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: _SummaryRow(
+                  label:
+                      '${entry.storeName} (${entry.distanceKm.toStringAsFixed(1)} km × ₹${chargePerKm?.toStringAsFixed(2) ?? '0.00'})',
+                  value: isFree ? 0 : entry.fee,
+                  valueText: isFree ? 'Rs 0.00' : null,
+                  valueColor: isFree ? const Color(0xFF16A34A) : null,
+                  compact: true,
+                ),
+              ),
+            ),
+          ] else
+            _SummaryRow(
+              label: distanceKm != null && chargePerKm != null
+                  ? 'Delivery fee (${distanceKm!.toStringAsFixed(1)} km × ₹${chargePerKm!.toStringAsFixed(2)})'
+                  : 'Delivery fee',
+              value: effectiveDeliveryFee,
+              valueText: effectiveDeliveryFee <= 0 ? 'Rs 0.00' : null,
+              valueColor: effectiveDeliveryFee <= 0
+                  ? const Color(0xFF16A34A)
+                  : null,
+            ),
           const SizedBox(height: 10),
           _SummaryRow(label: 'GST', value: gstAmount),
           if (appState.freeDeliveryEnabled)
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: isFree
                       ? const Color(0xFFF0FDF4)
@@ -754,8 +811,8 @@ class _SummaryCard extends StatelessWidget {
                         isFree
                             ? 'FREE delivery applied!'
                             : ((appState.freeDeliveryThreshold - subtotal) > 0
-                                ? 'Add Rs ${(appState.freeDeliveryThreshold - subtotal).toStringAsFixed(0)} more to get FREE delivery'
-                                : 'FREE delivery applied!'),
+                                  ? 'Add Rs ${(appState.freeDeliveryThreshold - subtotal).toStringAsFixed(0)} more to get FREE delivery'
+                                  : 'FREE delivery applied!'),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -785,6 +842,7 @@ class _SummaryRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.bold = false,
+    this.compact = false,
     this.valueText,
     this.valueColor,
   });
@@ -792,6 +850,7 @@ class _SummaryRow extends StatelessWidget {
   final String label;
   final double value;
   final bool bold;
+  final bool compact;
   final String? valueText;
   final Color? valueColor;
 
@@ -801,15 +860,19 @@ class _SummaryRow extends StatelessWidget {
     final textColor = valueColor ?? (bold ? _kOrange : _kTextDark);
     return Row(
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: bold ? 15 : 13,
-            color: bold ? _kTextDark : const Color(0xFF666666),
-            fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+        Expanded(
+          child: Text(
+            label,
+            maxLines: compact ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: bold ? 15 : (compact ? 11 : 13),
+              color: bold ? _kTextDark : const Color(0xFF666666),
+              fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+            ),
           ),
         ),
-        const Spacer(),
+        const SizedBox(width: 10),
         Text(
           displayText,
           style: TextStyle(

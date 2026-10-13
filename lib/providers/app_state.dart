@@ -33,6 +33,20 @@ class ReorderCartResult {
   bool get hasAddedItems => addedCount > 0;
 }
 
+class DeliveryChargeBreakdown {
+  const DeliveryChargeBreakdown({
+    required this.vendorId,
+    required this.storeName,
+    required this.distanceKm,
+    required this.fee,
+  });
+
+  final String vendorId;
+  final String storeName;
+  final double distanceKm;
+  final double fee;
+}
+
 class CartLine {
   CartLine({
     required this.product,
@@ -130,13 +144,13 @@ class AppState extends ChangeNotifier {
   bool shiftChargesEnabled = false;
   double dayDeliveryCharge = 35;
   double nightDeliveryCharge = 50;
-  String dayShiftStart = '06:00';
-  String dayShiftEnd = '22:00';
+  String dayShiftStart = '22:00';
+  String dayShiftEnd = '06:00';
 
   double get subtotal => cart.fold(0, (sum, line) => sum + line.total);
 
   /// Distance from the selected customer address to the farthest store in the
-  /// cart. The backend uses this value for the authoritative per-km charge.
+  /// cart. Kept for compatibility with older checkout/API payloads.
   double? cartDistanceKm(AddressModel? address) {
     final latitude = address?.latitude;
     final longitude = address?.longitude;
@@ -161,6 +175,76 @@ class AppState extends ChangeNotifier {
     return distances.reduce((a, b) => a > b ? a : b);
   }
 
+  double? distanceBasedDeliveryFee(AddressModel? address) {
+    if (!distanceBasedDelivery) return null;
+    final breakdown = deliveryChargeBreakdown(address);
+    if (breakdown.isEmpty) return null;
+    return double.parse(
+      breakdown
+          .fold<double>(0, (sum, entry) => sum + entry.fee)
+          .toStringAsFixed(2),
+    );
+  }
+
+  /// Calculates delivery independently for every store in the cart.
+  /// A multi-store cart creates separate deliveries, so each store's distance
+  /// and any active night surcharge must be charged separately.
+  List<DeliveryChargeBreakdown> deliveryChargeBreakdown(AddressModel? address) {
+    if (!distanceBasedDelivery ||
+        address?.latitude == null ||
+        address?.longitude == null) {
+      return const [];
+    }
+
+    final distancesByVendor = <String, double>{};
+    final namesByVendor = <String, String>{};
+    for (final line in cart) {
+      final storeLatitude = line.product.supplierLatitude;
+      final storeLongitude = line.product.supplierLongitude;
+      if (storeLatitude == null || storeLongitude == null) continue;
+      final vendorId = line.product.vendorId.trim().isEmpty
+          ? 'main'
+          : line.product.vendorId.trim();
+      final distance =
+          Geolocator.distanceBetween(
+            storeLatitude,
+            storeLongitude,
+            address!.latitude!,
+            address.longitude!,
+          ) /
+          1000;
+      final previous = distancesByVendor[vendorId];
+      distancesByVendor[vendorId] = previous == null || distance > previous
+          ? distance
+          : previous;
+      namesByVendor[vendorId] = line.product.supplierName.trim().isNotEmpty
+          ? line.product.supplierName.trim()
+          : (vendorId == 'main' ? 'Main Store' : vendorId);
+    }
+
+    final nightActive = shiftChargesEnabled && _isNightShiftNow();
+    return distancesByVendor.entries.map((entry) {
+      final fee =
+          (entry.value * deliveryBaseCharge) +
+          (nightActive ? nightDeliveryCharge : 0);
+      return DeliveryChargeBreakdown(
+        vendorId: entry.key,
+        storeName: namesByVendor[entry.key] ?? entry.key,
+        distanceKm: entry.value,
+        fee: double.parse(fee.toStringAsFixed(2)),
+      );
+    }).toList();
+  }
+
+  bool _isNightShiftNow() {
+    final currentMinutes = DateTime.now().hour * 60 + DateTime.now().minute;
+    final start = _parseTimeToMinutes(dayShiftStart, 22 * 60);
+    final end = _parseTimeToMinutes(dayShiftEnd, 6 * 60);
+    return start < end
+        ? currentMinutes >= start && currentMinutes < end
+        : currentMinutes >= start || currentMinutes < end;
+  }
+
   bool get usesProductTax => cart.isNotEmpty;
   double get productGstAmount =>
       cart.fold(0, (sum, line) => sum + line.total * (line.product.tax / 100));
@@ -171,7 +255,6 @@ class AppState extends ChangeNotifier {
       : subtotal * (gstPercent / 100);
   bool get isFreeDelivery {
     if (cart.isEmpty) return false;
-    if (checkoutSummary?['isFreeDelivery'] == true) return true;
     return freeDeliveryEnabled &&
         (freeDeliveryThreshold <= 0 || subtotal >= freeDeliveryThreshold);
   }
@@ -201,12 +284,14 @@ class AppState extends ChangeNotifier {
     if (shiftChargesEnabled) {
       final now = DateTime.now();
       final currentMinutes = now.hour * 60 + now.minute;
-      final start = _parseTimeToMinutes(dayShiftStart, 6 * 60);
-      final end = _parseTimeToMinutes(dayShiftEnd, 22 * 60);
-      final isDay = start < end
+      final start = _parseTimeToMinutes(dayShiftStart, 22 * 60);
+      final end = _parseTimeToMinutes(dayShiftEnd, 6 * 60);
+      final isNight = start < end
           ? (currentMinutes >= start && currentMinutes < end)
           : (currentMinutes >= start || currentMinutes < end);
-      return isDay ? dayDeliveryCharge : nightDeliveryCharge;
+      return isNight
+          ? deliveryChargeAmount + nightDeliveryCharge
+          : deliveryChargeAmount;
     }
     return deliveryChargeAmount;
   }
@@ -1128,7 +1213,10 @@ class AppState extends ChangeNotifier {
     final key = '${product.id}::${selectedUnit.toLowerCase()}';
     final index = cart.indexWhere((line) => line.key == key);
     if (quantity <= 0) {
-      if (index != -1) cart.removeAt(index);
+      if (index != -1) {
+        cart.removeAt(index);
+        checkoutSummary = null;
+      }
       return;
     }
     if (index == -1) {
@@ -1142,7 +1230,11 @@ class AppState extends ChangeNotifier {
           stock: stock,
         ),
       );
+      checkoutSummary = null;
       return;
+    }
+    if (cart[index].quantity != quantity) {
+      checkoutSummary = null;
     }
     cart[index].quantity = quantity;
   }
@@ -1153,6 +1245,7 @@ class AppState extends ChangeNotifier {
     cart
       ..clear()
       ..addAll(snapshot);
+    checkoutSummary = null;
     notifyListeners();
   }
 
@@ -2001,11 +2094,11 @@ class AppState extends ChangeNotifier {
         nightDeliveryCharge =
             prefs.getDouble('night_delivery_charge') ?? nightDeliveryCharge;
       }
-      if (prefs.containsKey('day_shift_start')) {
-        dayShiftStart = prefs.getString('day_shift_start') ?? dayShiftStart;
+      if (prefs.containsKey('night_shift_start')) {
+        dayShiftStart = prefs.getString('night_shift_start') ?? dayShiftStart;
       }
-      if (prefs.containsKey('day_shift_end')) {
-        dayShiftEnd = prefs.getString('day_shift_end') ?? dayShiftEnd;
+      if (prefs.containsKey('night_shift_end')) {
+        dayShiftEnd = prefs.getString('night_shift_end') ?? dayShiftEnd;
       }
     } catch (e) {
       debugPrint('Local delivery settings load skipped: $e');
@@ -2105,12 +2198,17 @@ class AppState extends ChangeNotifier {
             fallback: nightDeliveryCharge,
           );
         }
-        if (map.containsKey('day_shift_start') &&
-            map['day_shift_start'] != null) {
-          dayShiftStart = map['day_shift_start'].toString();
+        if ((map.containsKey('night_shift_start') ||
+                map.containsKey('day_shift_start')) &&
+            (map['night_shift_start'] ?? map['day_shift_start']) != null) {
+          dayShiftStart = (map['night_shift_start'] ?? map['day_shift_start'])
+              .toString();
         }
-        if (map.containsKey('day_shift_end') && map['day_shift_end'] != null) {
-          dayShiftEnd = map['day_shift_end'].toString();
+        if ((map.containsKey('night_shift_end') ||
+                map.containsKey('day_shift_end')) &&
+            (map['night_shift_end'] ?? map['day_shift_end']) != null) {
+          dayShiftEnd = (map['night_shift_end'] ?? map['day_shift_end'])
+              .toString();
         }
 
         // Cache updated remote settings to SharedPreferences
@@ -2139,6 +2237,8 @@ class AppState extends ChangeNotifier {
           await prefs.setDouble('night_delivery_charge', nightDeliveryCharge);
           await prefs.setString('day_shift_start', dayShiftStart);
           await prefs.setString('day_shift_end', dayShiftEnd);
+          await prefs.setString('night_shift_start', dayShiftStart);
+          await prefs.setString('night_shift_end', dayShiftEnd);
         } catch (_) {}
       }
 
@@ -2201,6 +2301,8 @@ class AppState extends ChangeNotifier {
         'night_delivery_charge': effectiveNightCharge,
         'day_shift_start': effectiveDayStart,
         'day_shift_end': effectiveDayEnd,
+        'night_shift_start': effectiveDayStart,
+        'night_shift_end': effectiveDayEnd,
       },
     );
     this.deliveryChargeAmount = deliveryChargeAmount;
@@ -2242,6 +2344,8 @@ class AppState extends ChangeNotifier {
       await prefs.setDouble('night_delivery_charge', effectiveNightCharge);
       await prefs.setString('day_shift_start', effectiveDayStart);
       await prefs.setString('day_shift_end', effectiveDayEnd);
+      await prefs.setString('night_shift_start', effectiveDayStart);
+      await prefs.setString('night_shift_end', effectiveDayEnd);
     } catch (_) {}
 
     notifyListeners();
@@ -3261,6 +3365,7 @@ class AppState extends ChangeNotifier {
     final snapshot = _cloneCart();
     final mutationToken = _nextCartMutationToken();
     cart.clear();
+    checkoutSummary = null;
     error = null;
     notifyListeners();
     unawaited(

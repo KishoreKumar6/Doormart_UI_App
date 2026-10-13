@@ -2356,6 +2356,7 @@ class _ProductRail extends StatelessWidget {
                     child: ProductCard(
                       product: products[i],
                       isFavorite: isFavorite,
+                      showRating: true,
                       imageFallbackBuilder: _funnyMissingImageFallback,
                       onFavoriteToggle: () {
                         final tapSw = Stopwatch()..start();
