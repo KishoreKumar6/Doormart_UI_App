@@ -21,7 +21,8 @@ class ForgotPasswordScreen extends StatefulWidget {
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _identifierCtrl = TextEditingController();
   final _otpCtrl = TextEditingController();
@@ -32,6 +33,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _obscureConfirm = true;
   bool _loading = false;
   String? _error;
+  late final AnimationController _motionController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat(reverse: true);
 
   @override
   void dispose() {
@@ -39,6 +44,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     _otpCtrl.dispose();
     _passCtrl.dispose();
     _confirmCtrl.dispose();
+    _motionController.dispose();
     super.dispose();
   }
 
@@ -129,18 +135,61 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       ),
                     ],
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      CircleAvatar(
-                        radius: 27,
-                        backgroundColor: Colors.white24,
-                        child: Icon(
-                          Icons.lock_reset_rounded,
-                          color: Colors.white,
-                          size: 29,
-                        ),
+                      AnimatedBuilder(
+                        animation: _motionController,
+                        builder: (context, child) {
+                          final t = Curves.easeInOut.transform(
+                            _motionController.value,
+                          );
+                          return Transform(
+                            alignment: Alignment.center,
+                            transform: Matrix4.identity()
+                              ..setEntry(3, 2, 0.0015)
+                              ..rotateY(-0.10 + (t * 0.20))
+                              ..rotateX(0.04 - (t * 0.08)),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  width: 58,
+                                  height: 58,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFB83B12),
+                                    borderRadius: BorderRadius.circular(19),
+                                  ),
+                                ),
+                                Container(
+                                  width: 54,
+                                  height: 54,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white24,
+                                    borderRadius: BorderRadius.circular(17),
+                                    border: Border.all(
+                                      color: Colors.white54,
+                                      width: 1.5,
+                                    ),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Color(0x44000000),
+                                        blurRadius: 12,
+                                        offset: Offset(0, 7),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.lock_reset_rounded,
+                                    color: Colors.white,
+                                    size: 29,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                      SizedBox(width: 14),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

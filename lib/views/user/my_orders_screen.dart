@@ -1255,9 +1255,16 @@ Future<void> _openProductReviewDialog({
                 productId: product.id,
                 rating: rating,
                 comment: commentCtrl.text.trim(),
+                // Rebuild the order screen only after the dialog is disposed.
+                notify: false,
               );
               if (!dialogContext.mounted) return;
               Navigator.pop(dialogContext);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (context.mounted) {
+                  appState.notifyReviewSubmitted();
+                }
+              });
               messenger.showSnackBar(
                 const SnackBar(content: Text('Thanks for your rating')),
               );

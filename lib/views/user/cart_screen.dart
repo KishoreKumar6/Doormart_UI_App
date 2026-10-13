@@ -805,7 +805,7 @@ class _BottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final totalQty = state.cart.fold<int>(0, (s, l) => s + l.quantity);
-    final itemsTotal = state.subtotal;
+    final itemsTotal = state.subtotal + state.gstAmount;
     final canCheckout =
         state.cart.isNotEmpty &&
         !state.nearbyVendorsLoading &&
@@ -860,7 +860,7 @@ class _BottomBar extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    'Items Total : Rs ${itemsTotal.toStringAsFixed(2)}',
+                    'Items Total (incl. GST)',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
@@ -868,8 +868,17 @@ class _BottomBar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
+                  Text(
+                    'Rs ${itemsTotal.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                      color: _kTextDark,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   const Text(
-                    'Delivery calculated at checkout',
+                    'GST included · Delivery calculated at checkout',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 12,

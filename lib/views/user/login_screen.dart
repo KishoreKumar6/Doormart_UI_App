@@ -267,14 +267,36 @@ class _LoginScreenState extends State<LoginScreen>
 
             // ── Scrollable form body ─────────────────────────────────
             Expanded(
-              child: FadeTransition(
-                opacity: _fade,
-                child: SlideTransition(
-                  position: _slide,
-                  child: TabBarView(
-                    controller: _tabCtrl,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: _kCard,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(30),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _kOrange.withValues(alpha: 0.10),
+                        blurRadius: 28,
+                        spreadRadius: 2,
+                        offset: const Offset(0, -5),
+                      ),
+                      const BoxShadow(
+                        color: Color(0x12000000),
+                        blurRadius: 18,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: FadeTransition(
+                    opacity: _fade,
+                    child: SlideTransition(
+                      position: _slide,
+                      child: TabBarView(
+                        controller: _tabCtrl,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: [
                       // ── Login tab ─────────────────────────────────
                       _LoginTab(
                         formKey: _loginFormKey,
@@ -328,7 +350,9 @@ class _LoginScreenState extends State<LoginScreen>
                         onSignUp: _signUp,
                         onGoLogin: () => _tabCtrl.animateTo(0),
                       ),
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -351,7 +375,7 @@ class _HeroHeader extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFFF26522), Color(0xFFD44010)],
+          colors: [Color(0xFF172033), Color(0xFF263A58), Color(0xFFE8541A)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -431,21 +455,87 @@ class _HeroHeader extends StatelessWidget {
                   ),
                 ),
 
+                const SizedBox(height: 16),
+
+                // Floating 3D brand badge
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: -0.13, end: 0.0),
+                  duration: const Duration(milliseconds: 900),
+                  curve: Curves.easeOutBack,
+                  builder: (context, angle, child) => Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.identity()
+                      ..setEntry(3, 2, 0.0015)
+                      ..rotateY(angle)
+                      ..rotateX(-angle * 0.45),
+                    child: child,
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Offset layers create a visible 3D extrusion.
+                      for (final offset in [
+                        const Offset(0, 8),
+                        const Offset(0, 5),
+                        const Offset(0, 2),
+                      ])
+                        Transform.translate(
+                          offset: offset,
+                          child: Container(
+                            width: 86,
+                            height: 86,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFB83B12),
+                              borderRadius: BorderRadius.circular(27),
+                            ),
+                          ),
+                        ),
+                      Container(
+                        width: 86,
+                        height: 86,
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(27),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.75),
+                            width: 2,
+                          ),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x44000000),
+                              blurRadius: 25,
+                              offset: Offset(0, 14),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(21),
+                          child: Image.asset(
+                            'assets/images/doormartLogo.jpeg',
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
                 const SizedBox(height: 18),
 
                 // Title
                 const Text(
-                  'Doormart',
+                  'DoorMart Delivery',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 28,
+                    fontSize: 32,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -0.5,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Fresh groceries • Delivered in 10 minutes',
+                  'Fresh groceries  •  delivered with care',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.82),
                     fontSize: 13,
@@ -461,7 +551,7 @@ class _HeroHeader extends StatelessWidget {
                   child: Container(
                     height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
+                      color: const Color(0x33000000),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: TabBar(

@@ -113,7 +113,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
       body: SafeArea(
         child: Consumer<AppState>(
           builder: (context, state, _) {
-            final products = _filteredProducts(state.nearbyProducts);
+            final storeProducts = _productsForCurrentStore(
+              state.nearbyProducts,
+            );
+            final products = _filteredProducts(storeProducts);
 
             return CustomScrollView(
               physics: const BouncingScrollPhysics(
@@ -204,10 +207,14 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     ),
                   )
                 else if (products.isEmpty)
-                  const SliverToBoxAdapter(
+                  SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: _EmptyState(),
+                      padding: const EdgeInsets.all(24),
+                      child: _EmptyState(
+                        isEmptyStore:
+                            _args?.isShopMode == true && storeProducts.isEmpty,
+                        shopName: _args?.shopName,
+                      ),
                     ),
                   )
                 else
@@ -351,6 +358,16 @@ class _ProductListScreenState extends State<ProductListScreen> {
     }
 
     return items;
+  }
+
+  List<dynamic> _productsForCurrentStore(List<dynamic> input) {
+    final vendorId = _args?.vendorId?.trim();
+    if (vendorId == null || vendorId.isEmpty) {
+      return List<dynamic>.from(input);
+    }
+    return input
+        .where((item) => (item.vendorId as String?)?.trim() == vendorId)
+        .toList();
   }
 
   void _showFilterSheet() {
@@ -1471,7 +1488,10 @@ class _FilterPill extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({required this.isEmptyStore, this.shopName});
+
+  final bool isEmptyStore;
+  final String? shopName;
 
   @override
   Widget build(BuildContext context) {
@@ -1482,17 +1502,21 @@ class _EmptyState extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
       ),
-      child: const Column(
+      child: Column(
         children: [
-          Icon(Icons.shopping_bag_outlined, size: 42, color: Color(0xFF0F9D58)),
+          Icon(Icons.storefront_outlined, size: 42, color: Color(0xFF0F9D58)),
           SizedBox(height: 10),
           Text(
-            'No products found',
+            isEmptyStore
+                ? 'No products available in this store'
+                : 'No products found',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
           SizedBox(height: 6),
           Text(
-            'Try changing the search or filters.',
+            isEmptyStore
+                ? '${shopName ?? 'This store'} has no products available right now. Please check back later or explore another store.'
+                : 'Try changing the search or filters.',
             textAlign: TextAlign.center,
           ),
         ],

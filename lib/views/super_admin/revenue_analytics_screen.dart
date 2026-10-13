@@ -111,6 +111,7 @@ class _AnalyticsHero extends StatelessWidget {
 
   String get _description => switch (period) {
     'day' => 'Hourly order activity for today',
+    'yesterday' => 'Hourly order activity for yesterday',
     'week' => 'Daily order activity for this week',
     'year' => 'Monthly order activity for this year',
     _ => 'Daily order activity for this month',
@@ -205,6 +206,12 @@ class _PeriodSelector extends StatelessWidget {
             label: 'Today',
             value: 'day',
             selected: period == 'day',
+            onTap: onChanged,
+          ),
+          _PeriodButton(
+            label: 'Yesterday',
+            value: 'yesterday',
+            selected: period == 'yesterday',
             onTap: onChanged,
           ),
           _PeriodButton(

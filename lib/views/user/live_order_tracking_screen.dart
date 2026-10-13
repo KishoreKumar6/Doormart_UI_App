@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
+import '../../features/operations/services/location_service.dart';
 import '../../models/order_model.dart';
 import '../../providers/app_state.dart';
 
@@ -19,8 +20,11 @@ class LiveOrderTrackingScreen extends StatefulWidget {
 
 class _LiveOrderTrackingScreenState extends State<LiveOrderTrackingScreen> {
   Timer? _refreshTimer;
+  Timer? _userLocationTimer;
   double? _latitude;
   double? _longitude;
+  double? _userLatitude;
+  double? _userLongitude;
   DateTime? _updatedAt;
   String? _error;
   bool _loading = true;
@@ -37,13 +41,33 @@ class _LiveOrderTrackingScreenState extends State<LiveOrderTrackingScreen> {
         const Duration(seconds: 8),
         (_) => _refreshLocation(),
       );
+      _userLocationTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => _refreshUserLocation(),
+      );
+      _refreshUserLocation();
     });
   }
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _userLocationTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _refreshUserLocation() async {
+    try {
+      final location = await LocationService().currentLocation();
+      if (!mounted) return;
+      setState(() {
+        _userLatitude = location.latitude;
+        _userLongitude = location.longitude;
+      });
+    } catch (_) {
+      // The delivery marker remains useful even when customer location is
+      // unavailable because permission or device location is disabled.
+    }
   }
 
   Future<void> _refreshLocation() async {
@@ -94,6 +118,7 @@ class _LiveOrderTrackingScreenState extends State<LiveOrderTrackingScreen> {
     }
 
     final hasLocation = _latitude != null && _longitude != null;
+    final hasUserLocation = _userLatitude != null && _userLongitude != null;
     return Scaffold(
       backgroundColor: const Color(0xFFF6F6F6),
       body: SafeArea(
@@ -108,10 +133,19 @@ class _LiveOrderTrackingScreenState extends State<LiveOrderTrackingScreen> {
                   const SizedBox(height: 16),
                   if (_loading)
                     const _MapLoadingCard()
-                  else if (hasLocation)
-                    _LiveMap(latitude: _latitude!, longitude: _longitude!)
+                  else if (hasLocation || hasUserLocation)
+                    _LiveMap(
+                      latitude: _latitude,
+                      longitude: _longitude,
+                      userLatitude: _userLatitude,
+                      userLongitude: _userLongitude,
+                    )
                   else
                     _WaitingForLocationCard(error: _error),
+                  if ((hasLocation || hasUserLocation) && hasUserLocation) ...[
+                    const SizedBox(height: 8),
+                    _MapLegend(showDelivery: hasLocation),
+                  ],
                   const SizedBox(height: 16),
                   _DeliveryPartnerCard(
                     name:
@@ -251,20 +285,43 @@ class _OrderSummary extends StatelessWidget {
 }
 
 class _LiveMap extends StatelessWidget {
-  const _LiveMap({required this.latitude, required this.longitude});
-  final double latitude;
-  final double longitude;
+  const _LiveMap({
+    required this.latitude,
+    required this.longitude,
+    this.userLatitude,
+    this.userLongitude,
+  });
+  final double? latitude;
+  final double? longitude;
+  final double? userLatitude;
+  final double? userLongitude;
 
   @override
   Widget build(BuildContext context) {
-    final point = LatLng(latitude, longitude);
+    final point = latitude != null && longitude != null
+        ? LatLng(latitude!, longitude!)
+        : null;
+    final userPoint = userLatitude != null && userLongitude != null
+        ? LatLng(userLatitude!, userLongitude!)
+        : null;
+    final center = point == null
+        ? userPoint!
+        : userPoint == null
+        ? point
+        : LatLng(
+            (point.latitude + userPoint.latitude) / 2,
+            (point.longitude + userPoint.longitude) / 2,
+          );
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: SizedBox(
         height: 330,
         child: FlutterMap(
-          key: ValueKey('$latitude,$longitude'),
-          options: MapOptions(initialCenter: point, initialZoom: 16),
+          key: ValueKey('$latitude,$longitude,$userLatitude,$userLongitude'),
+          options: MapOptions(
+            initialCenter: center,
+            initialZoom: point != null && userPoint != null ? 13.5 : 16,
+          ),
           children: [
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -272,29 +329,18 @@ class _LiveMap extends StatelessWidget {
             ),
             MarkerLayer(
               markers: [
-                Marker(
-                  point: point,
-                  width: 58,
-                  height: 58,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8541A),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 4),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: .18),
-                          blurRadius: 10,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.delivery_dining_rounded,
-                      color: Colors.white,
-                      size: 29,
-                    ),
+                if (point != null)
+                  _mapMarker(
+                    point: point,
+                    color: const Color(0xFFE8541A),
+                    icon: Icons.delivery_dining_rounded,
                   ),
-                ),
+                if (userPoint != null)
+                  _mapMarker(
+                    point: userPoint,
+                    color: const Color(0xFF2563EB),
+                    icon: Icons.person_pin_circle_rounded,
+                  ),
               ],
             ),
             const RichAttributionWidget(
@@ -305,6 +351,79 @@ class _LiveMap extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+Marker _mapMarker({
+  required LatLng point,
+  required Color color,
+  required IconData icon,
+}) {
+  return Marker(
+    point: point,
+    width: 58,
+    height: 58,
+    child: Container(
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 4),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: .18), blurRadius: 10),
+        ],
+      ),
+      child: Icon(icon, color: Colors.white, size: 29),
+    ),
+  );
+}
+
+class _MapLegend extends StatelessWidget {
+  const _MapLegend({required this.showDelivery});
+
+  final bool showDelivery;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (showDelivery) ...[
+          _LegendItem(color: Color(0xFFE8541A), label: 'Delivery person'),
+          SizedBox(width: 16),
+        ],
+        _LegendItem(color: Color(0xFF2563EB), label: 'Your live location'),
+      ],
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  const _LegendItem({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF6B7280),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }

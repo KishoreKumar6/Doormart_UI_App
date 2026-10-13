@@ -732,19 +732,16 @@ class _ActiveOrderScreenState extends State<ActiveOrderScreen> {
   }
 
   String _fullCustomerAddress(DeliveryOrderModel order) {
-    final parts = <String>[
+    final address = _cleanAddressParts([
       order.customerLine1 ?? '',
       order.customerArea,
       order.customerLandmark ?? '',
       order.customerCity ?? '',
       order.customerState ?? '',
       order.customerPincode ?? '',
-    ].map((part) => part.trim()).where((part) => part.isNotEmpty).toList();
-    final joined = parts.join(', ');
-    if (joined.isNotEmpty) return joined;
-    return order.customerAddress.trim().isNotEmpty
-        ? order.customerAddress.trim()
-        : '—';
+      order.customerAddress,
+    ]);
+    return address.isEmpty ? '—' : address;
   }
 }
 

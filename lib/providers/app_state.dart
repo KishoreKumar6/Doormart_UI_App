@@ -967,6 +967,7 @@ class AppState extends ChangeNotifier {
     required String productId,
     required double rating,
     String comment = '',
+    bool notify = true,
   }) async {
     if (token == null || user?.role != UserRoles.user) {
       throw StateError('Customer login required');
@@ -984,11 +985,25 @@ class AppState extends ChangeNotifier {
 
     await apiService.post('/reviews', token: token, body: payload);
 
+    // The server has accepted the rating. Update the in-memory state before
+    // persisting the local cache so a storage hiccup cannot show a false
+    // submission error after the review was already saved.
     reviewedProductKeys.add(reviewKey);
-    await _sessionService.addReviewedProductKey(
-      key: reviewKey,
-      userId: user?.id,
-    );
+    if (notify) {
+      notifyListeners();
+    }
+    try {
+      await _sessionService.addReviewedProductKey(
+        key: reviewKey,
+        userId: user?.id,
+      );
+    } catch (error) {
+      debugPrint('Review cache persistence skipped: $error');
+    }
+  }
+
+  /// Publishes the review state after the review dialog has been dismissed.
+  void notifyReviewSubmitted() {
     notifyListeners();
   }
 

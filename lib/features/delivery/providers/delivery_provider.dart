@@ -698,6 +698,8 @@ class DeliveryProvider extends ChangeNotifier {
   }
 
   bool get _hasTrackableActiveOrder =>
+      activeOrder?.status == DeliveryOrderStatus.accepted ||
+      activeOrder?.status == DeliveryOrderStatus.packed ||
       activeOrder?.status == DeliveryOrderStatus.pickedUp ||
       activeOrder?.status == DeliveryOrderStatus.outForDelivery;
 

@@ -1238,17 +1238,16 @@ String _cleanAddressParts(List<String> values) {
 }
 
 String _fullCustomerAddress(dynamic order) {
-  final parts = <String>[
+  final address = _cleanAddressParts([
     _text(order.customerLine1, fallback: ''),
     _text(order.customerArea, fallback: ''),
     _text(order.customerLandmark, fallback: ''),
     _text(order.customerCity, fallback: ''),
     _text(order.customerState, fallback: ''),
     _text(order.customerPincode, fallback: ''),
-  ].map((part) => part.trim()).where((part) => part.isNotEmpty).toList();
-  final joined = parts.join(', ');
-  if (joined.isNotEmpty) return joined;
-  return _text(order.customerAddress, fallback: '—');
+    _text(order.customerAddress, fallback: ''),
+  ]);
+  return address.isEmpty ? '—' : address;
 }
 
 double _amount(dynamic order) {
