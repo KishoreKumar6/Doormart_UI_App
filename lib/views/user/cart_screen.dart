@@ -833,59 +833,59 @@ class _BottomBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Item count
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$totalQty Selected Food',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                      color: _kTextDark,
-                    ),
+              Expanded(
+                child: Text(
+                  '$totalQty Selected Food Items',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    color: _kTextDark,
+                    height: 1.25,
                   ),
-                  const Text(
-                    'Items',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                      color: _kTextDark,
-                    ),
-                  ),
-                ],
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 12),
               // Total
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'Items Total (incl. GST)',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: _kTextMid,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Items Total (incl. GST)',
+                      maxLines: 2,
+                      textAlign: TextAlign.right,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: _kTextMid,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Rs ${itemsTotal.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                      color: _kTextDark,
+                    const SizedBox(height: 4),
+                    Text(
+                      'Rs ${itemsTotal.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        color: _kTextDark,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'GST included · Delivery calculated at checkout',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                      color: _kTextMid,
+                    const SizedBox(height: 4),
+                    Text(
+                      'GST included · Delivery at checkout',
+                      maxLines: 2,
+                      textAlign: TextAlign.right,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                        color: _kTextMid,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),

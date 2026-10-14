@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
@@ -3088,6 +3090,14 @@ class _VendorDetailsDialog extends StatelessWidget {
                         ),
                       ),
                       IconButton(
+                        tooltip: 'Export vendor details',
+                        onPressed: () => _exportVendorDetails(context, vendor),
+                        icon: const Icon(
+                          Icons.download_rounded,
+                          color: Colors.white,
+                        ),
+                      ),
+                      IconButton(
                         onPressed: () => Navigator.pop(context),
                         icon: const Icon(Icons.close, color: Colors.white),
                       ),
@@ -3194,9 +3204,12 @@ class _VendorDetailsDialog extends StatelessWidget {
                                     crossAxisCount: crossAxisCount,
                                     mainAxisSpacing: 12,
                                     crossAxisSpacing: 12,
+                                    // Leave enough vertical room for the
+                                    // document title, preview and the
+                                    // explicit Download document button.
                                     childAspectRatio: crossAxisCount == 1
-                                        ? 1.9
-                                        : 1.45,
+                                        ? 1.25
+                                        : 1.15,
                                   ),
                               itemBuilder: (context, index) {
                                 return _AttachmentCard(
@@ -3439,6 +3452,23 @@ class _AttachmentCard extends StatelessWidget {
                   ),
                 ],
               ),
+              if (hasUrl)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => _openExternalUrl(context, attachment.url),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFFE8541A),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    icon: const Icon(Icons.download_rounded, size: 18),
+                    label: const Text(
+                      'Download document',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
               const SizedBox(height: 12),
               Expanded(
                 child: ClipRRect(
@@ -3546,5 +3576,50 @@ Future<void> _openExternalUrl(BuildContext context, String url) async {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Could not open document')));
+  }
+}
+
+Future<void> _exportVendorDetails(
+  BuildContext context,
+  VendorModel vendor,
+) async {
+  final report =
+      '''DoorMart Vendor Details
+
+Vendor ID: ${_formatVendorDisplayId(vendor.vendorId, vendor.id)}
+Store name: ${vendor.name}
+Owner name: ${vendor.ownerName}
+Email: ${vendor.email ?? ''}
+Phone: ${vendor.phone}
+Business type: ${vendor.businessType}
+GSTIN: ${vendor.gstin}
+PAN: ${vendor.panNumber}
+
+Address: ${vendor.address}
+Pickup address: ${vendor.pickupAddress}
+City: ${vendor.city}
+State: ${vendor.state}
+Pincode: ${vendor.pincode}
+
+Account holder: ${vendor.bankAccountHolderName}
+Account number: ${vendor.bankAccountNumber}
+IFSC: ${vendor.ifscCode}
+Commission: ${vendor.commissionPercent.toStringAsFixed(2)}%
+
+GST certificate: ${vendor.gstCertificateUrl}
+PAN card: ${vendor.panCardUrl}
+Cancelled cheque: ${vendor.cancelledChequeUrl}
+''';
+
+  final uri = Uri.dataFromString(
+    report,
+    mimeType: 'text/plain',
+    encoding: utf8,
+  );
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Unable to export vendor details')),
+    );
   }
 }

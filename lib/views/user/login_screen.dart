@@ -260,104 +260,125 @@ class _LoginScreenState extends State<LoginScreen>
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
         backgroundColor: _kBg,
-        body: Column(
-          children: [
-            // ── Orange hero header ───────────────────────────────────
-            _HeroHeader(tabCtrl: _tabCtrl),
-
-            // ── Scrollable form body ─────────────────────────────────
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: _kCard,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(30),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _kOrange.withValues(alpha: 0.10),
-                        blurRadius: 28,
-                        spreadRadius: 2,
-                        offset: const Offset(0, -5),
-                      ),
-                      const BoxShadow(
-                        color: Color(0x12000000),
-                        blurRadius: 18,
-                        offset: Offset(0, 8),
-                      ),
-                    ],
+        resizeToAvoidBottomInset: true,
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final contentWidth = constraints.maxWidth > 620
+                ? 600.0
+                : constraints.maxWidth;
+            return NestedScrollView(
+              headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                SliverToBoxAdapter(
+                  child: _HeroHeader(
+                    tabCtrl: _tabCtrl,
+                    compact: false,
+                    showTabs: false,
                   ),
-                  child: FadeTransition(
-                    opacity: _fade,
-                    child: SlideTransition(
-                      position: _slide,
-                      child: TabBarView(
-                        controller: _tabCtrl,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: [
-                      // ── Login tab ─────────────────────────────────
-                      _LoginTab(
-                        formKey: _loginFormKey,
-                        emailCtrl: _loginEmailCtrl,
-                        passCtrl: _loginPassCtrl,
-                        otpCtrl: _loginOtpCtrl,
-                        otpSent: _otpSent,
-                        loginMode: _loginMode,
-                        obscurePass: _obscureLoginPass,
-                        onTogglePass: () => setState(
-                          () => _obscureLoginPass = !_obscureLoginPass,
+                ),
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _AuthTabsHeaderDelegate(tabCtrl: _tabCtrl),
+                ),
+              ],
+              body: Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: contentWidth,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _kCard,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(30),
                         ),
-                        onChangeMode: (mode) {
-                          setState(() {
-                            _loginMode = mode;
-                            _otpSent = false;
-                          });
-                        },
-                        loading: _loading,
-                        onLogin: _login,
-                        onGuest: _continueAsGuest,
-                        onGoRegister: () => _tabCtrl.animateTo(1),
-                        onGoForgotPassword: () {
-                          Navigator.of(
-                            context,
-                          ).pushNamed(ForgotPasswordScreen.routeName);
-                        },
-                        onResendOtp: _sendLoginOtp,
-                      ),
-
-                      // ── Sign up tab ───────────────────────────────
-                      _SignupTab(
-                        formKey: _signupFormKey,
-                        nameCtrl: _nameCtrl,
-                        emailCtrl: _emailCtrl,
-                        phoneCtrl: _phoneCtrl,
-                        passCtrl: _passCtrl,
-                        confirmPassCtrl: _confirmPassCtrl,
-                        obscurePass: _obscurePass,
-                        obscureConfirm: _obscureConfirm,
-                        onTogglePass: () =>
-                            setState(() => _obscurePass = !_obscurePass),
-                        onToggleConfirm: () =>
-                            setState(() => _obscureConfirm = !_obscureConfirm),
-                        agreed: _agreed,
-                        onToggleAgreed: () =>
-                            setState(() => _agreed = !_agreed),
-                        loading: _loading,
-                        strength: _strength(_passCtrl.text),
-                        onPasswordChanged: () => setState(() {}),
-                        onSignUp: _signUp,
-                        onGoLogin: () => _tabCtrl.animateTo(0),
-                      ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _kOrange.withValues(alpha: 0.10),
+                            blurRadius: 28,
+                            spreadRadius: 2,
+                            offset: const Offset(0, -5),
+                          ),
+                          const BoxShadow(
+                            color: Color(0x12000000),
+                            blurRadius: 18,
+                            offset: Offset(0, 8),
+                          ),
                         ],
+                      ),
+                      child: FadeTransition(
+                        opacity: _fade,
+                        child: SlideTransition(
+                          position: _slide,
+                          child: TabBarView(
+                            controller: _tabCtrl,
+                            physics: const NeverScrollableScrollPhysics(),
+                            children: [
+                              // ── Login tab ─────────────────────────────────
+                              _LoginTab(
+                                formKey: _loginFormKey,
+                                emailCtrl: _loginEmailCtrl,
+                                passCtrl: _loginPassCtrl,
+                                otpCtrl: _loginOtpCtrl,
+                                otpSent: _otpSent,
+                                loginMode: _loginMode,
+                                obscurePass: _obscureLoginPass,
+                                onTogglePass: () => setState(
+                                  () => _obscureLoginPass = !_obscureLoginPass,
+                                ),
+                                onChangeMode: (mode) {
+                                  setState(() {
+                                    _loginMode = mode;
+                                    _otpSent = false;
+                                  });
+                                },
+                                loading: _loading,
+                                onLogin: _login,
+                                onGuest: _continueAsGuest,
+                                onGoRegister: () => _tabCtrl.animateTo(1),
+                                onGoForgotPassword: () {
+                                  Navigator.of(
+                                    context,
+                                  ).pushNamed(ForgotPasswordScreen.routeName);
+                                },
+                                onResendOtp: _sendLoginOtp,
+                              ),
+
+                              // ── Sign up tab ───────────────────────────────
+                              _SignupTab(
+                                formKey: _signupFormKey,
+                                nameCtrl: _nameCtrl,
+                                emailCtrl: _emailCtrl,
+                                phoneCtrl: _phoneCtrl,
+                                passCtrl: _passCtrl,
+                                confirmPassCtrl: _confirmPassCtrl,
+                                obscurePass: _obscurePass,
+                                obscureConfirm: _obscureConfirm,
+                                onTogglePass: () => setState(
+                                  () => _obscurePass = !_obscurePass,
+                                ),
+                                onToggleConfirm: () => setState(
+                                  () => _obscureConfirm = !_obscureConfirm,
+                                ),
+                                agreed: _agreed,
+                                onToggleAgreed: () =>
+                                    setState(() => _agreed = !_agreed),
+                                loading: _loading,
+                                strength: _strength(_passCtrl.text),
+                                onPasswordChanged: () => setState(() {}),
+                                onSignUp: _signUp,
+                                onGoLogin: () => _tabCtrl.animateTo(0),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -367,11 +388,71 @@ class _LoginScreenState extends State<LoginScreen>
 // ─── Hero Header ──────────────────────────────────────────────────────────────
 
 class _HeroHeader extends StatelessWidget {
-  const _HeroHeader({required this.tabCtrl});
+  const _HeroHeader({
+    required this.tabCtrl,
+    this.compact = false,
+    this.showTabs = true,
+  });
   final TabController tabCtrl;
+  final bool compact;
+  final bool showTabs;
 
   @override
   Widget build(BuildContext context) {
+    if (compact) {
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF172033), Color(0xFFE8541A)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.maybePop(context),
+                      child: const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'DoorMart',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const Spacer(),
+                    const Icon(
+                      Icons.storefront_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(height: 42, child: _AuthTabBar(tabCtrl: tabCtrl)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -545,49 +626,21 @@ class _HeroHeader extends StatelessWidget {
 
                 const SizedBox(height: 32),
 
-                // Tab bar — sits at bottom of header
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: const Color(0x33000000),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: TabBar(
-                      controller: tabCtrl,
-                      indicator: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.10),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                if (showTabs) ...[
+                  // Tab bar — sits at bottom of header
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0x33000000),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      dividerColor: Colors.transparent,
-                      labelColor: _kOrange,
-                      unselectedLabelColor: Colors.white,
-                      labelStyle: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                      ),
-                      unselectedLabelStyle: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                      tabs: const [
-                        Tab(text: 'Log In'),
-                        Tab(text: 'Sign Up'),
-                      ],
+                      child: _AuthTabBar(tabCtrl: tabCtrl),
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 8),
+                  const SizedBox(height: 8),
+                ],
 
                 // White curve at bottom of header
                 Container(
@@ -606,6 +659,85 @@ class _HeroHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AuthTabBar extends StatelessWidget {
+  const _AuthTabBar({required this.tabCtrl});
+
+  final TabController tabCtrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return TabBar(
+      controller: tabCtrl,
+      indicator: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.10),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      indicatorSize: TabBarIndicatorSize.tab,
+      dividerColor: Colors.transparent,
+      labelColor: _kOrange,
+      unselectedLabelColor: Colors.white,
+      labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+      unselectedLabelStyle: const TextStyle(
+        fontWeight: FontWeight.w600,
+        fontSize: 14,
+      ),
+      tabs: const [
+        Tab(text: 'Log In'),
+        Tab(text: 'Sign Up'),
+      ],
+    );
+  }
+}
+
+class _AuthTabsHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _AuthTabsHeaderDelegate({required this.tabCtrl});
+
+  final TabController tabCtrl;
+
+  @override
+  double get minExtent => 70;
+
+  @override
+  double get maxExtent => 70;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(
+      color: _kBg,
+      padding: const EdgeInsets.fromLTRB(24, 10, 24, 12),
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: const Color(0xFF263A58),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x18000000),
+              blurRadius: 10,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: _AuthTabBar(tabCtrl: tabCtrl),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _AuthTabsHeaderDelegate oldDelegate) => false;
 }
 
 // ─── Login Tab ────────────────────────────────────────────────────────────────
@@ -648,8 +780,14 @@ class _LoginTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+      padding: EdgeInsets.fromLTRB(
+        24,
+        16,
+        24,
+        32 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
       child: Form(
         key: formKey,
         child: Column(
@@ -862,8 +1000,14 @@ class _SignupTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+      padding: EdgeInsets.fromLTRB(
+        24,
+        8,
+        24,
+        32 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
       child: Form(
         key: formKey,
         child: Column(

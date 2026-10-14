@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/app_state.dart';
@@ -27,12 +28,23 @@ class DeliveryHomeScreen extends StatefulWidget {
   State<DeliveryHomeScreen> createState() => _DeliveryHomeScreenState();
 }
 
-class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
+class _DeliveryHomeScreenState extends State<DeliveryHomeScreen>
+    with WidgetsBindingObserver {
   _MetricRange _range = _MetricRange.today;
+  bool _locationEnabled = true;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshLocationStatus();
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshLocationStatus();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = context.read<DeliveryProvider>();
       await provider.bootstrap();
@@ -47,6 +59,22 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
       await provider.syncOnlineState();
       await provider.loadDashboard();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _refreshLocationStatus() async {
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (mounted) setState(() => _locationEnabled = enabled);
+  }
+
+  Future<void> _openLocationSettings() async {
+    await Geolocator.openLocationSettings();
+    await _refreshLocationStatus();
   }
 
   @override
@@ -147,6 +175,10 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 100 + bottomInset),
         children: [
+          if (!_locationEnabled) ...[
+            _LocationDisabledBanner(onTurnOn: _openLocationSettings),
+            const SizedBox(height: 16),
+          ],
           // ── Profile card ─────────────────────────────────────────────
           _ProfileCard(
             name: person?.name ?? 'Delivery Partner',
@@ -155,6 +187,10 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
             online: provider.online,
             onToggle: (v) {
               HapticFeedback.lightImpact();
+              if (v && !_locationEnabled) {
+                _openLocationSettings();
+                return;
+              }
               v ? provider.goOnline() : provider.goOffline();
             },
           ),
@@ -329,6 +365,72 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
 }
 
 // ─── Profile Card ─────────────────────────────────────────────────────────────
+
+class _LocationDisabledBanner extends StatelessWidget {
+  const _LocationDisabledBanner({required this.onTurnOn});
+
+  final VoidCallback onTurnOn;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFDBA74)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.location_off_rounded,
+            color: Color(0xFFEA580C),
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Location is turned off',
+                  style: TextStyle(
+                    color: Color(0xFF9A3412),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Turn on your phone location to receive orders and share live delivery tracking.',
+                  style: TextStyle(
+                    color: Color(0xFF9A3412),
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onTurnOn,
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFEA580C),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              visualDensity: VisualDensity.compact,
+            ),
+            child: const Text(
+              'Turn on',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _ProfileCard extends StatelessWidget {
   const _ProfileCard({

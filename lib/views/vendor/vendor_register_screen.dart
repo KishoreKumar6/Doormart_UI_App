@@ -196,6 +196,15 @@ class _VendorRegisterScreenState extends State<VendorRegisterScreen> {
       setState(() => _error = 'Passwords do not match');
       return;
     }
+    if (_pickupLatitude == null || _pickupLongitude == null) {
+      HapticFeedback.vibrate();
+      setState(
+        () => _error =
+            'Store pickup location is required. Tap "Use current location" before submitting.',
+      );
+      showToast(context, _error!);
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -217,8 +226,14 @@ class _VendorRegisterScreenState extends State<VendorRegisterScreen> {
         state: _stateCtrl.text.trim(),
         pincode: _pincodeCtrl.text.trim(),
         bankAccountHolderName: _bankHolderCtrl.text.trim(),
-        bankAccountNumber: _bankNumberCtrl.text.trim(),
-        ifscCode: _ifscCtrl.text.trim(),
+        bankAccountNumber: _bankNumberCtrl.text.trim().replaceAll(
+          RegExp(r'[\s-]'),
+          '',
+        ),
+        ifscCode: _ifscCtrl.text
+            .trim()
+            .replaceAll(RegExp(r'\s'), '')
+            .toUpperCase(),
         storeLogo: _storeLogo ?? '',
         gstCertificate: _gstCertificate ?? '',
         panCard: _panCard ?? '',
@@ -492,6 +507,10 @@ class _VendorRegisterScreenState extends State<VendorRegisterScreen> {
                         controller: _bankHolderCtrl,
                         label: 'Bank Account Holder Name',
                         icon: Icons.person_pin_circle_rounded,
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? 'Enter the account holder name'
+                            : null,
                       ),
                       const SizedBox(height: 12),
                       CustomTextField(
@@ -500,6 +519,17 @@ class _VendorRegisterScreenState extends State<VendorRegisterScreen> {
                         label: 'Bank Account Number',
                         icon: Icons.account_balance_rounded,
                         keyboardType: TextInputType.number,
+                        validator: (value) {
+                          final account = (value ?? '').replaceAll(
+                            RegExp(r'[\s-]'),
+                            '',
+                          );
+                          if (account.isEmpty) return 'Enter account number';
+                          if (!RegExp(r'^\d{8,18}$').hasMatch(account)) {
+                            return 'Use 8–18 digits';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 12),
                       CustomTextField(
@@ -507,6 +537,18 @@ class _VendorRegisterScreenState extends State<VendorRegisterScreen> {
                         controller: _ifscCtrl,
                         label: 'IFSC Code',
                         icon: Icons.code_rounded,
+                        validator: (value) {
+                          final ifsc = (value ?? '')
+                              .replaceAll(RegExp(r'\s'), '')
+                              .toUpperCase();
+                          if (ifsc.isEmpty) return 'Enter IFSC code';
+                          if (!RegExp(
+                            r'^[A-Z]{4}0[A-Z0-9]{6}$',
+                          ).hasMatch(ifsc)) {
+                            return 'Enter a valid IFSC code';
+                          }
+                          return null;
+                        },
                       ),
                     ],
                   ),
@@ -1102,7 +1144,7 @@ class _PickupLocationCard extends StatelessWidget {
           Text(
             hasLocation
                 ? 'Saved pin: ${latitude!.toStringAsFixed(6)}, ${longitude!.toStringAsFixed(6)}'
-                : 'Use the exact store pin so delivery partners reach the right pickup point.',
+                : 'Required: use the exact store pin so delivery partners reach the right pickup point.',
             style: const TextStyle(
               fontSize: 12.5,
               color: _kTextDark,

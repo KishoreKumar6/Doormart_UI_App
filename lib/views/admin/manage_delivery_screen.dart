@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants.dart';
 import '../../models/user_model.dart';
@@ -1842,6 +1843,25 @@ class _PartnerDialogState extends State<_PartnerDialog> {
     }
   }
 
+  Future<void> _openDocument(String? value) async {
+    final rawUrl = value?.trim() ?? '';
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null || !uri.hasScheme) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Document link is not available')),
+        );
+      }
+      return;
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to open document')));
+    }
+  }
+
   // ── Save ──────────────────────────────────────────────────────────────────
   Future<void> _save() async {
     if (_nameCtrl.text.trim().isEmpty) {
@@ -2046,6 +2066,9 @@ class _PartnerDialogState extends State<_PartnerDialog> {
                   onSelected: (url) => _panCardUrl = url,
                   onNameSelected: (name) => _panCardName = name,
                 ),
+                onOpen: (_panCardUrl ?? '').isNotEmpty
+                    ? () => _openDocument(_panCardUrl)
+                    : null,
                 onClear: _panCardUrl != null
                     ? () {
                         setState(() {
@@ -2069,6 +2092,9 @@ class _PartnerDialogState extends State<_PartnerDialog> {
                   onSelected: (url) => _licenseCardUrl = url,
                   onNameSelected: (name) => _licenseCardName = name,
                 ),
+                onOpen: (_licenseCardUrl ?? '').isNotEmpty
+                    ? () => _openDocument(_licenseCardUrl)
+                    : null,
                 onClear: _licenseCardUrl != null
                     ? () {
                         setState(() {
@@ -2091,6 +2117,9 @@ class _PartnerDialogState extends State<_PartnerDialog> {
                   onSelected: (url) => _aadhaarCardUrl = url,
                   onNameSelected: (name) => _aadhaarCardName = name,
                 ),
+                onOpen: (_aadhaarCardUrl ?? '').isNotEmpty
+                    ? () => _openDocument(_aadhaarCardUrl)
+                    : null,
                 onClear: _aadhaarCardUrl != null
                     ? () {
                         setState(() {
@@ -2451,6 +2480,7 @@ class _DocumentUploadCard extends StatelessWidget {
     required this.value,
     required this.uploading,
     required this.onTap,
+    required this.onOpen,
     required this.onClear,
   });
 
@@ -2459,6 +2489,7 @@ class _DocumentUploadCard extends StatelessWidget {
   final String value;
   final bool uploading;
   final VoidCallback onTap;
+  final VoidCallback? onOpen;
   final VoidCallback? onClear;
 
   @override
@@ -2544,15 +2575,22 @@ class _DocumentUploadCard extends StatelessWidget {
                     valueColor: AlwaysStoppedAnimation<Color>(_kOrange),
                   ),
                 )
-              else if (onClear != null && hasValue) ...[
-                TextButton(
-                  onPressed: onClear,
-                  style: TextButton.styleFrom(foregroundColor: _kOrange),
-                  child: const Text(
-                    'Clear',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
+              else if (hasValue) ...[
+                IconButton(
+                  tooltip: 'View / download document',
+                  onPressed: onOpen,
+                  visualDensity: VisualDensity.compact,
+                  color: _kOrange,
+                  icon: const Icon(Icons.download_rounded, size: 20),
                 ),
+                if (onClear != null)
+                  IconButton(
+                    tooltip: 'Remove document',
+                    onPressed: onClear,
+                    visualDensity: VisualDensity.compact,
+                    color: _kOrange,
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                  ),
               ] else
                 const Icon(
                   Icons.chevron_right_rounded,
