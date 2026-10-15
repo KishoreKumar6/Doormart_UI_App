@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/product_model.dart';
+import '../../widgets/closed_store_overlay.dart';
 import '../../widgets/product_price_breakdown.dart';
 import '../../providers/app_state.dart';
 import '../../widgets/toast_widget.dart';
@@ -146,15 +147,27 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               borderRadius: BorderRadius.circular(24),
               child: AspectRatio(
                 aspectRatio: 1.2,
-                child: Image.network(
-                  product.imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: const Color(0xFFEFEFEF),
-                    child: const Center(
-                      child: Icon(Icons.image_not_supported_outlined, size: 44),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      product.imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: const Color(0xFFEFEFEF),
+                        child: const Center(
+                          child: Icon(
+                            Icons.image_not_supported_outlined,
+                            size: 44,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    if (product.vendorIsOpen == false)
+                      ClosedStoreOverlay(
+                        label: closedStoreLabelForProduct(product),
+                      ),
+                  ],
                 ),
               ),
             ),

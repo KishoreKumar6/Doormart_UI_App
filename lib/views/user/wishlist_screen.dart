@@ -7,6 +7,7 @@ import '../../core/utils/network_image_url.dart';
 import '../../models/product_model.dart';
 import '../../providers/app_state.dart';
 import '../../widgets/product_bottom_sheet.dart';
+import '../../widgets/closed_store_overlay.dart';
 import '../../widgets/product_price_breakdown.dart';
 import '../../widgets/premium_selection_sheet.dart';
 import '../../widgets/toast_widget.dart';
@@ -30,7 +31,9 @@ class _WishlistScreenState extends State<WishlistScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<AppState>().loadNearbyVendorIds();
+      final state = context.read<AppState>();
+      state.loadNearbyVendorIds();
+      state.loadFavorites();
     });
   }
 
@@ -107,8 +110,15 @@ class _WishlistScreenState extends State<WishlistScreen> {
                               const SizedBox(height: 16),
                           itemBuilder: (context, index) {
                             final product = favorites[index];
+                            final statusProduct = state.storeStatusProduct(
+                              product,
+                            );
                             return _FavoriteCard(
                               product: product,
+                              isClosed: statusProduct.vendorIsOpen == false,
+                              closedLabel: closedStoreLabelForProduct(
+                                statusProduct,
+                              ),
                               onTap: () => showProductBottomSheet(
                                 context,
                                 product,
@@ -389,12 +399,16 @@ class _TopBar extends StatelessWidget {
 class _FavoriteCard extends StatelessWidget {
   const _FavoriteCard({
     required this.product,
+    required this.isClosed,
+    required this.closedLabel,
     required this.onTap,
     required this.onToggleFavorite,
     required this.isFavorited,
   });
 
   final ProductModel product;
+  final bool isClosed;
+  final String closedLabel;
   final VoidCallback onTap;
   final VoidCallback onToggleFavorite;
   final bool isFavorited;
@@ -500,6 +514,8 @@ class _FavoriteCard extends StatelessWidget {
                             ],
                           ),
                         ),
+                        if (isClosed)
+                          ClosedStoreOverlay(label: closedLabel),
                       ],
                     ),
                   ),

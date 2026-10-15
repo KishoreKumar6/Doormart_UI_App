@@ -742,13 +742,6 @@ class _SummaryCard extends StatelessWidget {
           _SummaryRow(label: 'Subtotal', value: subtotal),
           const SizedBox(height: 10),
           if (deliveryBreakdown.length > 1) ...[
-            _SummaryRow(
-              label: 'Delivery fee (2 stores)',
-              value: effectiveDeliveryFee,
-              valueText: isFree ? 'Rs 0.00' : null,
-              valueColor: isFree ? const Color(0xFF16A34A) : null,
-            ),
-            const SizedBox(height: 6),
             ...deliveryBreakdown.map(
               (entry) => Padding(
                 padding: const EdgeInsets.only(bottom: 7),
@@ -760,6 +753,16 @@ class _SummaryCard extends StatelessWidget {
                   valueColor: isFree ? const Color(0xFF16A34A) : null,
                   compact: true,
                 ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: _SummaryRow(
+                label: 'Total delivery fee',
+                value: effectiveDeliveryFee,
+                valueText: isFree ? 'Rs 0.00' : null,
+                valueColor: isFree ? const Color(0xFF16A34A) : null,
+                bold: true,
               ),
             ),
           ] else

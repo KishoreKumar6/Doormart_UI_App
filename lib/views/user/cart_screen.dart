@@ -8,6 +8,7 @@ import '../../core/utils/network_image_url.dart';
 import '../../providers/app_state.dart';
 import '../../widgets/toast_widget.dart';
 import '../../widgets/product_price_breakdown.dart';
+import '../../widgets/closed_store_overlay.dart';
 import 'checkout_screen.dart';
 import 'search_screen.dart';
 import 'user_home_screen.dart';
@@ -31,6 +32,7 @@ class CartScreen extends StatelessWidget {
       final state = context.read<AppState>();
       state.loadNearbyVendorIds();
       state.loadCheckoutSettings();
+      state.refreshCartStoreStatus();
     });
     return Scaffold(
       backgroundColor: _kBg,
@@ -52,17 +54,21 @@ class CartScreen extends StatelessWidget {
                     itemCount:
                         state.cart.length +
                         ((state.nearbyLocationUnavailable ||
-                                state.hasUnavailableCartItems)
+                                state.hasUnavailableCartItems ||
+                                state.hasClosedCartItems)
                             ? 1
                             : 0),
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final showNotice =
                           state.nearbyLocationUnavailable ||
-                          state.hasUnavailableCartItems;
+                          state.hasUnavailableCartItems ||
+                          state.hasClosedCartItems;
                       if (showNotice && index == 0) {
                         return _CartLocationNotice(
                           locationUnavailable: state.nearbyLocationUnavailable,
+                          hasUnavailableItems: state.hasUnavailableCartItems,
+                          hasClosedItems: state.hasClosedCartItems,
                           message: state.nearbyLocationMessage,
                         );
                       }
@@ -71,11 +77,27 @@ class CartScreen extends StatelessWidget {
                           !state.nearbyVendorsLoading &&
                           !state.nearbyLocationUnavailable &&
                           !state.isProductNearUser(line.product);
+                      final storeStatusProduct = state.storeStatusProduct(
+                        line.product,
+                      );
+                      final isClosed =
+                          storeStatusProduct.vendorIsOpen == false;
                       return _CartItemCard(
                         key: ValueKey(line.key),
                         line: line,
                         isUnavailable: isUnavailable,
+                        isClosed: isClosed,
+                        closedLabel: closedStoreLabelForProduct(
+                          storeStatusProduct,
+                        ),
                         onIncrement: () {
+                          if (isClosed) {
+                            showToast(
+                              context,
+                              'This store is closed right now',
+                            );
+                            return;
+                          }
                           if (isUnavailable) {
                             showToast(
                               context,
@@ -105,6 +127,13 @@ class CartScreen extends StatelessWidget {
                           );
                         },
                         onUnitChanged: (unit) {
+                          if (isClosed) {
+                            showToast(
+                              context,
+                              'This store is closed right now',
+                            );
+                            return;
+                          }
                           if (isUnavailable) {
                             showToast(
                               context,
@@ -281,14 +310,32 @@ class _AppBarIcon extends StatelessWidget {
 class _CartLocationNotice extends StatelessWidget {
   const _CartLocationNotice({
     required this.locationUnavailable,
+    required this.hasUnavailableItems,
+    required this.hasClosedItems,
     required this.message,
   });
 
   final bool locationUnavailable;
+  final bool hasUnavailableItems;
+  final bool hasClosedItems;
   final String message;
 
   @override
   Widget build(BuildContext context) {
+    final showLocation = locationUnavailable || hasUnavailableItems;
+    final showClosed = !showLocation && hasClosedItems;
+    final String text;
+    if (locationUnavailable) {
+      text = message.isNotEmpty
+          ? message
+          : 'Turn on location and allow permission to check item availability near you.';
+    } else if (hasUnavailableItems) {
+      text = 'Some cart items are not available near your location.';
+    } else if (showClosed) {
+      text = 'Some items are from a store that is currently closed.';
+    } else {
+      text = '';
+    }
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -298,15 +345,16 @@ class _CartLocationNotice extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.location_on_rounded, color: _kOrange),
+          Icon(
+            showLocation
+                ? Icons.location_on_rounded
+                : Icons.storefront_rounded,
+            color: _kOrange,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              locationUnavailable
-                  ? (message.isNotEmpty
-                        ? message
-                        : 'Turn on location and allow permission to check item availability near you.')
-                  : 'Some cart items are not available near your location.',
+              text,
               style: const TextStyle(
                 color: _kTextDark,
                 fontWeight: FontWeight.w800,
@@ -327,6 +375,8 @@ class _CartItemCard extends StatelessWidget {
     super.key,
     required this.line,
     required this.isUnavailable,
+    required this.isClosed,
+    required this.closedLabel,
     required this.onIncrement,
     required this.onDecrement,
     required this.onUnitChanged,
@@ -334,6 +384,8 @@ class _CartItemCard extends StatelessWidget {
 
   final dynamic line; // your CartLine / CartItem type
   final bool isUnavailable;
+  final bool isClosed;
+  final String closedLabel;
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
   final ValueChanged<String> onUnitChanged;
@@ -364,7 +416,14 @@ class _CartItemCard extends StatelessWidget {
               child: SizedBox(
                 width: 96,
                 height: 124,
-                child: _ProductImage(imageUrl: line.product.imageUrl ?? ''),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _ProductImage(imageUrl: line.product.imageUrl ?? ''),
+                    if (isClosed)
+                      ClosedStoreOverlay(label: closedLabel),
+                  ],
+                ),
               ),
             ),
 
@@ -411,13 +470,31 @@ class _CartItemCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        _UnitSwitcher(line: line, onUnitChanged: onUnitChanged),
+                        isClosed
+                            ? _UnitChip(label: _unitLabel(line.selectedUnit))
+                            : _UnitSwitcher(
+                                line: line,
+                                onUnitChanged: onUnitChanged,
+                              ),
                       ],
                     ),
                     if (isUnavailable) ...[
                       const SizedBox(height: 6),
                       const Text(
                         'Not available near you',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _kOrange,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                    if (isClosed) ...[
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Store closed',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -810,7 +887,8 @@ class _BottomBar extends StatelessWidget {
         state.cart.isNotEmpty &&
         !state.nearbyVendorsLoading &&
         !state.nearbyLocationUnavailable &&
-        !state.hasUnavailableCartItems;
+        !state.hasUnavailableCartItems &&
+        !state.hasClosedCartItems;
 
     return Container(
       decoration: BoxDecoration(
@@ -955,6 +1033,13 @@ class _BottomBar extends StatelessWidget {
               }
               if (state.hasUnavailableCartItems) {
                 showToast(context, 'Remove unavailable items before checkout');
+                return;
+              }
+              if (state.hasClosedCartItems) {
+                showToast(
+                  context,
+                  'Remove items from closed stores before checkout',
+                );
                 return;
               }
               HapticFeedback.mediumImpact();

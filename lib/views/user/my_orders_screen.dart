@@ -96,10 +96,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             final deliveredOrders = orders
                 .where((order) => order.status == OrderStatus.delivered)
                 .length;
-            final totalSpent = orders.fold<double>(
-              0,
-              (sum, order) => sum + order.total,
-            );
+            final totalSpent = orders
+                .where((order) => order.status == OrderStatus.delivered)
+                .fold<double>(0, (sum, order) => sum + order.total);
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1239,11 +1238,13 @@ Future<void> _openProductReviewDialog({
   double rating = 0;
   bool submitting = false;
   final commentCtrl = TextEditingController();
+  ModalRoute<void>? dialogRoute;
 
-  await showDialog<void>(
+  final submitted = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
     builder: (dialogContext) {
+      dialogRoute = ModalRoute.of(dialogContext);
       return StatefulBuilder(
         builder: (dialogContext, setModalState) {
           Future<void> submit() async {
@@ -1259,15 +1260,7 @@ Future<void> _openProductReviewDialog({
                 notify: false,
               );
               if (!dialogContext.mounted) return;
-              Navigator.pop(dialogContext);
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (context.mounted) {
-                  appState.notifyReviewSubmitted();
-                }
-              });
-              messenger.showSnackBar(
-                const SnackBar(content: Text('Thanks for your rating')),
-              );
+              Navigator.pop(dialogContext, true);
             } catch (e) {
               if (!dialogContext.mounted) return;
               setModalState(() => submitting = false);
@@ -1671,7 +1664,19 @@ Future<void> _openProductReviewDialog({
     },
   );
 
+  // Wait until the dialog route is fully removed from the navigator before
+  // rebuilding the app. Rebuilding the root MaterialApp while the dialog is
+  // mid-teardown leaves stale inherited-widget dependents behind and trips
+  // Flutter's '_dependents.isEmpty' assertion on the next frame.
+  await dialogRoute?.completed;
   commentCtrl.dispose();
+
+  if (submitted == true) {
+    appState.notifyReviewSubmitted();
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Thanks for your rating')),
+    );
+  }
 }
 
 String _ratingFeedbackLabel(double rating) {

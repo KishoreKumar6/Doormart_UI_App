@@ -6,6 +6,7 @@ import '../../core/utils/network_image_url.dart';
 import '../../features/customer/search/voice_search_widget.dart';
 import '../../providers/app_state.dart';
 import '../../widgets/bottom_nav_bar.dart';
+import '../../widgets/closed_store_overlay.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/product_bottom_sheet.dart';
 import '../../widgets/product_price_breakdown.dart';
@@ -484,6 +485,10 @@ class _ProductFeedCard extends StatelessWidget {
                               ],
                             ),
                           ),
+                          if (isStoreClosedForProduct(product))
+                            ClosedStoreOverlay(
+                              label: closedStoreLabelForProduct(product),
+                            ),
                         ],
                       ),
                     ),

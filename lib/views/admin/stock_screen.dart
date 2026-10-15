@@ -360,7 +360,7 @@ class _StockMetrics extends StatelessWidget {
             crossAxisCount: columns,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 1.2,
+            mainAxisExtent: 150,
           ),
           itemBuilder: (context, index) => cards[index],
         );
@@ -407,6 +407,8 @@ class _CountCard extends StatelessWidget {
           ],
           Text(
             title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: base,
               fontWeight: FontWeight.w800,
@@ -414,12 +416,17 @@ class _CountCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF1A1A1A),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF1A1A1A),
+              ),
             ),
           ),
         ],

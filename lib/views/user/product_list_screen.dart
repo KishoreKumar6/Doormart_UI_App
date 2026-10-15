@@ -8,6 +8,7 @@ import '../../features/customer/search/voice_search_widget.dart';
 import '../../models/product_model.dart';
 import '../../providers/app_state.dart';
 import '../../widgets/bottom_nav_bar.dart';
+import '../../widgets/closed_store_overlay.dart';
 import '../../widgets/product_bottom_sheet.dart';
 import '../../widgets/product_price_breakdown.dart';
 import '../../widgets/premium_selection_sheet.dart';
@@ -156,17 +157,16 @@ class _ProductListScreenState extends State<ProductListScreen> {
                       child: _ShopAddressCard(args: _args!),
                     ),
                   ),
-                if (_args?.isShopMode == true)
-                  SliverPersistentHeader(
-                    pinned: true,
-                    delegate: _ShopSearchDelegate(
-                      controller: _searchController,
-                      shopName: _args!.shopName ?? 'this shop',
-                      onChanged: (value) {
-                        setState(() => _query = value.trim());
-                      },
-                    ),
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _ProductListSearchDelegate(
+                    controller: _searchController,
+                    hintText: 'Search atta, milk, fruits…',
+                    onChanged: (value) {
+                      setState(() => _query = value.trim());
+                    },
                   ),
+                ),
                 SliverToBoxAdapter(
                   child: SizedBox(
                     height: 54,
@@ -485,15 +485,15 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _ShopSearchDelegate extends SliverPersistentHeaderDelegate {
-  const _ShopSearchDelegate({
+class _ProductListSearchDelegate extends SliverPersistentHeaderDelegate {
+  const _ProductListSearchDelegate({
     required this.controller,
-    required this.shopName,
+    required this.hintText,
     required this.onChanged,
   });
 
   final TextEditingController controller;
-  final String shopName;
+  final String hintText;
   final ValueChanged<String> onChanged;
 
   @override
@@ -526,7 +526,7 @@ class _ShopSearchDelegate extends SliverPersistentHeaderDelegate {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: VoiceSearchWidget(
         controller: controller,
-        hintText: 'Search products in $shopName',
+        hintText: hintText,
         showSearchAction: false,
         onSearchChanged: onChanged,
         onSubmitted: onChanged,
@@ -535,9 +535,9 @@ class _ShopSearchDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  bool shouldRebuild(covariant _ShopSearchDelegate oldDelegate) {
+  bool shouldRebuild(covariant _ProductListSearchDelegate oldDelegate) {
     return oldDelegate.controller != controller ||
-        oldDelegate.shopName != shopName;
+        oldDelegate.hintText != hintText;
   }
 }
 
@@ -1005,6 +1005,10 @@ class _ProductFeedCard extends StatelessWidget {
                                 ],
                               ),
                             ),
+                            if (isStoreClosedForProduct(product))
+                              ClosedStoreOverlay(
+                                label: closedStoreLabelForProduct(product),
+                              ),
                           ],
                         ),
                       ),

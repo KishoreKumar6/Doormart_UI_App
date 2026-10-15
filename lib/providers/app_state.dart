@@ -312,6 +312,36 @@ class AppState extends ChangeNotifier {
       .where((line) => !isProductNearUser(line.product))
       .toList(growable: false);
   bool get hasUnavailableCartItems => unavailableCartLines.isNotEmpty;
+  List<CartLine> get closedCartLines => cart
+      .where((line) => storeStatusProduct(line.product).vendorIsOpen == false)
+      .toList(growable: false);
+  bool get hasClosedCartItems => closedCartLines.isNotEmpty;
+
+  /// The most recently loaded copy of [product] that carries a definitive store
+  /// open/closed status, preferring products already fetched for the home, list,
+  /// wishlist and buy-again screens over a possibly stale cart/wishlist snapshot.
+  ProductModel storeStatusProduct(ProductModel product) {
+    final id = product.id;
+    ProductModel? known;
+    if (id.isNotEmpty) {
+      for (final list in [products, favorites, buyAgainProducts]) {
+        for (final candidate in list) {
+          if (candidate.id == id && candidate.vendorIsOpen != null) {
+            known = candidate;
+            break;
+          }
+        }
+        if (known != null) break;
+      }
+    }
+    if (known == null) return product;
+    // A definite "closed" from any source wins; otherwise keep the cart line's
+    // own (possibly refreshed) value and only fall back to [known] when unknown.
+    if (known.vendorIsOpen == false || product.vendorIsOpen == null) {
+      return known;
+    }
+    return product;
+  }
   bool get signedIn => token != null;
   String get logoutRouteName {
     switch (user?.role) {
@@ -3230,6 +3260,50 @@ class AppState extends ChangeNotifier {
         }).whereType<CartLine>(),
       );
     notifyListeners();
+  }
+
+  /// Refreshes only the store open/closed status of items already in the cart
+  /// without replacing the local cart, so a store that closes after an item was
+  /// added is reflected on the cart page (and freshly added items are kept).
+  Future<void> refreshCartStoreStatus() async {
+    if (token == null || cart.isEmpty) return;
+    final Map<String, ProductModel> freshProducts = {};
+    try {
+      final data = await apiService.get('/cart', token: token);
+      final items = data is Map<String, dynamic>
+          ? (data['items'] as List<dynamic>? ?? [])
+          : <dynamic>[];
+      for (final item in items.whereType<Map<String, dynamic>>()) {
+        final productJson = item['product'];
+        if (productJson is! Map<String, dynamic>) continue;
+        final product = ProductModel.fromJson(productJson);
+        if (product.id.isEmpty) continue;
+        freshProducts[product.id] = product;
+      }
+    } catch (_) {
+      return;
+    }
+    var changed = false;
+    for (var i = 0; i < cart.length; i++) {
+      final line = cart[i];
+      final updated = freshProducts[line.product.id];
+      if (updated == null || updated.vendorIsOpen == null) continue;
+      if (updated.vendorIsOpen == line.product.vendorIsOpen &&
+          updated.vendorTodayOpenTime == line.product.vendorTodayOpenTime &&
+          updated.vendorTodayCloseTime == line.product.vendorTodayCloseTime) {
+        continue;
+      }
+      cart[i] = CartLine(
+        product: updated,
+        quantity: line.quantity,
+        unit: line.unit,
+        price: line.price,
+        discountCost: line.discountCost,
+        stock: line.stock,
+      );
+      changed = true;
+    }
+    if (changed) notifyListeners();
   }
 
   Future<bool> _syncAddToCart(

@@ -1,9 +1,8 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../core/utils/network_image_url.dart';
 import '../models/product_model.dart';
+import 'closed_store_overlay.dart';
 import 'product_price_breakdown.dart';
 
 class ProductCard extends StatelessWidget {
@@ -29,6 +28,7 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isClosed = product.vendorIsOpen == false;
     return _HoverCard(
       onTap: onTap,
       child: ClipRRect(
@@ -130,6 +130,10 @@ class ProductCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (isClosed)
+                      ClosedStoreOverlay(
+                        label: closedStoreLabelForProduct(product),
+                      ),
                   ],
                 ),
               ),

@@ -12,6 +12,7 @@ import '../../core/utils/network_image_url.dart';
 import '../../models/product_model.dart';
 import '../../providers/app_state.dart';
 import '../../widgets/bottom_nav_bar.dart';
+import '../../widgets/closed_store_overlay.dart';
 import '../../widgets/product_bottom_sheet.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/product_price_breakdown.dart';
@@ -2049,6 +2050,7 @@ class _BuyAgainProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isClosed = product.vendorIsOpen == false;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: Duration(milliseconds: 360 + index * 45),
@@ -2145,6 +2147,10 @@ class _BuyAgainProductCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (isClosed)
+                          ClosedStoreOverlay(
+                            label: _closedStoreLabel(product),
+                          ),
                       ],
                     ),
                   ),
@@ -3815,31 +3821,7 @@ class _PopularStyleProductCard extends StatelessWidget {
                       ),
                     ),
                     if (isStoreClosed)
-                      Positioned.fill(
-                        child: Container(
-                          color: Colors.black.withValues(alpha: 0.28),
-                          alignment: Alignment.center,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 7,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              _closedStoreLabel(product),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: _kGreen,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      ClosedStoreOverlay(label: _closedStoreLabel(product)),
                   ],
                 ),
               ),

@@ -6,6 +6,7 @@ import '../core/utils/network_image_url.dart';
 import '../models/product_model.dart';
 import '../providers/app_state.dart';
 import '../widgets/toast_widget.dart';
+import 'closed_store_overlay.dart';
 import 'product_price_breakdown.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -430,6 +431,9 @@ class _ImageHero extends StatelessWidget {
 
           // Product image
           _ProductBackground(product: product),
+
+          if (product.vendorIsOpen == false)
+            ClosedStoreOverlay(label: closedStoreLabelForProduct(product)),
 
           // Bottom fade
           Positioned(
