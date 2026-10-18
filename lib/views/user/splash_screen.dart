@@ -53,9 +53,11 @@ class _SplashScreenState extends State<SplashScreen>
     final state = context.watch<AppState>();
     if (_navigated || !state.initialized) return;
     _navigated = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      _finishStartup(state);
+      // Single navigation path: _finishStartup performs the optional update
+      // check and then routes to the role-specific dashboard exactly once.
+      await _finishStartup(state);
     });
   }
 

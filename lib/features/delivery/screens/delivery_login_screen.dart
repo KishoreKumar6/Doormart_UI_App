@@ -46,8 +46,10 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen>
     duration: const Duration(milliseconds: 600),
   )..forward();
 
-  late final Animation<double> _fade =
-      CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _entryCtrl,
+    curve: Curves.easeOut,
+  );
 
   late final Animation<Offset> _slide = Tween<Offset>(
     begin: const Offset(0, 0.06),
@@ -134,22 +136,22 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen>
                             alignment: Alignment.centerRight,
                             child: TextButton(
                               onPressed: () {
-                                Navigator.of(context).pushNamed(
-                                  ForgotPasswordScreen.routeName,
-                                );
+                                Navigator.of(
+                                  context,
+                                ).pushNamed(ForgotPasswordScreen.routeName);
                               },
                               style: TextButton.styleFrom(
                                 foregroundColor: _kOrange,
                                 padding: EdgeInsets.zero,
                                 minimumSize: Size.zero,
-                                tapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
                               child: const Text(
                                 'Forgot password?',
                                 style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
                               ),
                             ),
                           ),
@@ -172,9 +174,9 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen>
                           const SizedBox(height: 24),
 
                           _SignupPrompt(
-                            onTap: () => Navigator.of(context).pushNamed(
-                              DeliveryRegisterScreen.routeName,
-                            ),
+                            onTap: () => Navigator.of(
+                              context,
+                            ).pushNamed(DeliveryRegisterScreen.routeName),
                           ),
 
                           const SizedBox(height: 18),
@@ -189,11 +191,13 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen>
                             child: GestureDetector(
                               onTap: () {},
                               child: const Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.center,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.support_agent_rounded,
-                                      size: 16, color: _kTextMid),
+                                  Icon(
+                                    Icons.support_agent_rounded,
+                                    size: 16,
+                                    color: _kTextMid,
+                                  ),
                                   SizedBox(width: 6),
                                   Text(
                                     'Need help? Contact partner support',
@@ -272,8 +276,7 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() =>
-          _error = e.toString().replaceFirst('Exception: ', ''));
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -344,9 +347,10 @@ class _HeroHeader extends StatelessWidget {
                             borderRadius: BorderRadius.circular(11),
                           ),
                           child: const Icon(
-                              Icons.arrow_back_ios_new_rounded,
-                              color: Colors.white,
-                              size: 16),
+                            Icons.arrow_back_ios_new_rounded,
+                            color: Colors.white,
+                            size: 16,
+                          ),
                         ),
                       ),
                     ],
@@ -362,8 +366,7 @@ class _HeroHeader extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(22),
-                    border:
-                        Border.all(color: Colors.white24, width: 1.5),
+                    border: Border.all(color: Colors.white24, width: 1.5),
                   ),
                   child: const Icon(
                     Icons.delivery_dining_rounded,
@@ -386,7 +389,9 @@ class _HeroHeader extends StatelessWidget {
                 const SizedBox(height: 4),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 5),
+                    horizontal: 12,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(999),
@@ -435,8 +440,7 @@ class _WelcomeCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: _kOrangeLight,
         borderRadius: BorderRadius.circular(20),
-        border:
-            Border.all(color: _kOrange.withValues(alpha: 0.18)),
+        border: Border.all(color: _kOrange.withValues(alpha: 0.18)),
       ),
       child: Row(
         children: [
@@ -558,10 +562,14 @@ class _Field extends StatelessWidget {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(
-              color: _kTextMid.withValues(alpha: 0.6), fontSize: 14),
+            color: _kTextMid.withValues(alpha: 0.6),
+            fontSize: 14,
+          ),
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 16,
+            horizontal: 14,
+          ),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 4),
             child: Icon(icon, color: _kOrange, size: 20),
@@ -593,8 +601,7 @@ class _ErrorBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFFEF2F2),
         borderRadius: BorderRadius.circular(12),
-        border:
-            Border.all(color: _kRed.withValues(alpha: 0.25)),
+        border: Border.all(color: _kRed.withValues(alpha: 0.25)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -641,10 +648,10 @@ class _PrimaryBtnState extends State<_PrimaryBtn>
     vsync: this,
     duration: const Duration(milliseconds: 110),
   );
-  late final Animation<double> _s =
-      Tween<double>(begin: 1.0, end: 0.96).animate(
-    CurvedAnimation(parent: _c, curve: Curves.easeInOut),
-  );
+  late final Animation<double> _s = Tween<double>(
+    begin: 1.0,
+    end: 0.96,
+  ).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut));
 
   @override
   void dispose() {
@@ -694,9 +701,9 @@ class _PrimaryBtnState extends State<_PrimaryBtn>
                     width: 22,
                     height: 22,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor:
-                            AlwaysStoppedAnimation(Colors.white)),
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation(Colors.white),
+                    ),
                   )
                 : Row(
                     mainAxisSize: MainAxisSize.min,
@@ -739,8 +746,7 @@ class _InfoStrip extends StatelessWidget {
       decoration: BoxDecoration(
         color: _kOrangeLight,
         borderRadius: BorderRadius.circular(20),
-        border:
-            Border.all(color: _kOrange.withValues(alpha: 0.18)),
+        border: Border.all(color: _kOrange.withValues(alpha: 0.18)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,

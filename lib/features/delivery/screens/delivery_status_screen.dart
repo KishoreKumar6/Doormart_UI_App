@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../../providers/app_state.dart';
 import '../providers/delivery_provider.dart';
 import 'delivery_home_screen.dart';
+import 'delivery_initial_payment_screen.dart';
 import 'delivery_login_screen.dart';
 import 'delivery_register_screen.dart';
 
@@ -108,17 +109,39 @@ class DeliveryStatusScreen extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 24),
-                            if (status == 'approved')
-                              _ActionButton(
-                                label: 'Go to Dashboard',
-                                filled: true,
-                                onPressed: () => Navigator.of(context)
-                                    .pushNamedAndRemoveUntil(
-                                      DeliveryHomeScreen.routeName,
-                                      (route) => false,
-                                    ),
-                              )
-                            else if (status == 'rejected') ...[
+                            if (status == 'approved') ...[
+                              if (context
+                                  .watch<DeliveryProvider>()
+                                  .isInitialPaymentRequired) ...[
+                                _ActionButton(
+                                  label: 'Pay Initial Onboarding Fee',
+                                  filled: true,
+                                  onPressed: () =>
+                                      Navigator.of(context).pushNamed(
+                                        DeliveryInitialPaymentScreen.routeName,
+                                      ),
+                                ),
+                                const SizedBox(height: 12),
+                                _ActionButton(
+                                  label: 'Go to Dashboard',
+                                  filled: false,
+                                  onPressed: () => Navigator.of(context)
+                                      .pushNamedAndRemoveUntil(
+                                        DeliveryHomeScreen.routeName,
+                                        (route) => false,
+                                      ),
+                                ),
+                              ] else
+                                _ActionButton(
+                                  label: 'Go to Dashboard',
+                                  filled: true,
+                                  onPressed: () => Navigator.of(context)
+                                      .pushNamedAndRemoveUntil(
+                                        DeliveryHomeScreen.routeName,
+                                        (route) => false,
+                                      ),
+                                ),
+                            ] else if (status == 'rejected') ...[
                               _ActionButton(
                                 label: 'Refresh Status',
                                 filled: true,

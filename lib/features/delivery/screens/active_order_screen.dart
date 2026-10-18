@@ -23,6 +23,7 @@ class _ActiveOrderScreenState extends State<ActiveOrderScreen> {
   String? _otpError;
   bool _otpVerified = false;
   bool _markingPickedUp = false;
+  bool _markingOutForDelivery = false;
   bool _markingDelivered = false;
 
   @override
@@ -323,14 +324,30 @@ class _ActiveOrderScreenState extends State<ActiveOrderScreen> {
                       title: 'Payment summary',
                       child: Column(
                         children: [
-                          _infoRow('Payment method', order.paymentType),
+                          _infoRow(
+                            'Items subtotal',
+                            '₹${order.itemSubtotal.toStringAsFixed(2)}',
+                          ),
+                          _infoRow(
+                            'Delivery fee',
+                            '₹${order.deliveryFee.toStringAsFixed(2)}',
+                          ),
+                          if (order.gstAmount > 0)
+                            _infoRow(
+                              'GST',
+                              '₹${order.gstAmount.toStringAsFixed(2)}',
+                            ),
+                          _infoRow(
+                            'Payment method',
+                            isCod ? 'Cash on delivery' : 'Paid online',
+                          ),
                           if (isCod)
                             _infoRow(
                               'Collect from customer',
                               '₹${order.codAmount?.toStringAsFixed(2) ?? order.totalAmount.toStringAsFixed(2)}',
                             ),
                           _infoRow(
-                            'Order total',
+                            'Customer total',
                             '₹${order.totalAmount.toStringAsFixed(2)}',
                           ),
                           _infoRow('Placed at', _formatDate(order.createdAt)),
@@ -444,24 +461,47 @@ class _ActiveOrderScreenState extends State<ActiveOrderScreen> {
                             const SizedBox(height: 10),
                             _FlowActionTile(
                               step: '3',
-                              icon: Icons.map_outlined,
-                              title: 'Go to customer',
-                              subtitle:
-                                  'Open directions to the delivery address',
+                              icon: Icons.directions_car_outlined,
+                              title: 'Out for delivery',
+                              subtitle: 'Tap when heading to customer location',
                               accent: const Color(0xFFFFA142),
                               onTap:
-                                  order.customerLatitude != null &&
-                                          order.customerLongitude != null ||
-                                      _hasAddress(_fullCustomerAddress(order))
-                                  ? () => _openDirections(
-                                      address: _fullCustomerAddress(order),
-                                      latitude: order.customerLatitude,
-                                      longitude: order.customerLongitude,
-                                      conflictLatitude: order.vendorLatitude,
-                                      conflictLongitude: order.vendorLongitude,
-                                    )
+                                  provider.activeOrder?.status ==
+                                          DeliveryOrderStatus.pickedUp ||
+                                      provider.activeOrder?.status ==
+                                          DeliveryOrderStatus.packed
+                                  ? () async {
+                                      if (_markingOutForDelivery) return;
+                                      setState(
+                                        () => _markingOutForDelivery = true,
+                                      );
+                                      final message = await provider
+                                          .markOutForDelivery();
+                                      if (!context.mounted) return;
+                                      setState(
+                                        () => _markingOutForDelivery = false,
+                                      );
+                                      if (message == null) {
+                                        showToast(
+                                          context,
+                                          'Order marked as out for delivery',
+                                        );
+                                      } else if (message.isNotEmpty) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(content: Text(message)),
+                                        );
+                                      }
+                                    }
                                   : null,
-                              disabledLabel: 'Customer address not available',
+                              loading: _markingOutForDelivery,
+                              disabled:
+                                  !(provider.activeOrder?.status ==
+                                          DeliveryOrderStatus.pickedUp ||
+                                      provider.activeOrder?.status ==
+                                          DeliveryOrderStatus.packed),
+                              disabledLabel: 'Complete pickup first',
                             ),
                             const SizedBox(height: 10),
                             _FlowArrow(color: pickupFlowColor),
@@ -1474,32 +1514,6 @@ class _MiniStat extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ItemChip extends StatelessWidget {
-  const _ItemChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF0EB),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFFFD2C0)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Color(0xFFE8541A),
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
-        ),
       ),
     );
   }

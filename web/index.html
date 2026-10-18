@@ -41,6 +41,54 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <!-- Cashfree JS SDK v3 for Web PG Checkout -->
+  <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+  <script>
+    window.doCashfreeCheckout = function(paymentSessionId, environment) {
+      function notify(data) {
+        if (window._cashfreeCheckoutCallback) {
+          try {
+            window._cashfreeCheckoutCallback(typeof data === "string" ? data : JSON.stringify(data));
+          } catch(e) {
+            console.error("[Cashfree Web] Callback invocation error:", e);
+          }
+        }
+      }
+
+      function execute() {
+        try {
+          var clean = (environment || "").toString().toLowerCase().trim();
+          var mode = (clean === "prod" || clean === "production") ? "production" : "sandbox";
+          var cf = window.Cashfree({ mode: mode });
+          cf.checkout({
+            paymentSessionId: paymentSessionId,
+            redirectTarget: "_modal"
+          }).then(function(result) {
+            console.log("[Cashfree Web] Checkout finished:", result);
+            notify(result || { status: "COMPLETED" });
+          }).catch(function(err) {
+            console.error("[Cashfree Web] Checkout error:", err);
+            notify({ error: (err && err.message) || "Payment cancelled or failed" });
+          });
+        } catch (e) {
+          console.error("[Cashfree Web] Execution error:", e);
+          notify({ error: (e && e.message) || "Execution error" });
+        }
+      }
+
+      if (window.Cashfree) {
+        execute();
+      } else {
+        var script = document.createElement("script");
+        script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
+        script.onload = execute;
+        script.onerror = function() {
+          notify({ error: "Unable to load Cashfree JavaScript SDK" });
+        };
+        document.head.appendChild(script);
+      }
+    };
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

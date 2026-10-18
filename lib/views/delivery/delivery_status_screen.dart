@@ -100,9 +100,9 @@ class _StatusHeader extends StatelessWidget {
               child: Text(
                 '$count assigned or active orders',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],
@@ -136,8 +136,8 @@ class _StatusCard extends StatelessWidget {
                   child: Text(
                     'Order #${_shortId(order.id)}',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 _StatusPill(status: order.status),
@@ -173,8 +173,9 @@ class _ProgressLine extends StatelessWidget {
       OrderStatus.pickedUp,
       OrderStatus.delivered,
     ];
-    final activeIndex =
-        status == OrderStatus.cancelled ? -1 : steps.indexOf(status);
+    final activeIndex = status == OrderStatus.cancelled
+        ? -1
+        : steps.indexOf(status);
 
     return Row(
       children: steps.asMap().entries.map((entry) {
@@ -188,8 +189,8 @@ class _ProgressLine extends StatelessWidget {
                 color: status == OrderStatus.cancelled
                     ? const Color(0xFFFFCBD5)
                     : active
-                        ? const Color(0xFF0F766E)
-                        : const Color(0xFFE2E8F0),
+                    ? const Color(0xFF0F766E)
+                    : const Color(0xFFE2E8F0),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const SizedBox(height: 8),
@@ -219,8 +220,8 @@ class _StatusPill extends StatelessWidget {
     final color = status == OrderStatus.cancelled
         ? const Color(0xFFBE123C)
         : status == OrderStatus.delivered
-            ? const Color(0xFF0F766E)
-            : const Color(0xFF1D4ED8);
+        ? const Color(0xFF0F766E)
+        : const Color(0xFF1D4ED8);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -231,10 +232,7 @@ class _StatusPill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         child: Text(
           label,
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.w900,
-          ),
+          style: TextStyle(color: color, fontWeight: FontWeight.w900),
         ),
       ),
     );

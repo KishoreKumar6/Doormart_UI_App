@@ -14,12 +14,12 @@ class NotificationPayload {
   final String? entityId;
 
   Map<String, dynamic> toMap() => {
-        'orderId': orderId,
-        'title': title,
-        'body': body,
-        'type': type,
-        if (entityId != null) 'entityId': entityId,
-      };
+    'orderId': orderId,
+    'title': title,
+    'body': body,
+    'type': type,
+    if (entityId != null) 'entityId': entityId,
+  };
 
   factory NotificationPayload.fromMap(Map<String, dynamic> map) {
     return NotificationPayload(

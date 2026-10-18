@@ -32,11 +32,7 @@ class AuthProvider extends ChangeNotifier {
     required String password,
   }) async {
     try {
-      await loginWithPassword(
-        email: email,
-        phone: phone,
-        password: password,
-      );
+      await loginWithPassword(email: email, phone: phone, password: password);
       return null;
     } catch (e) {
       return e.toString().replaceFirst('Exception: ', '');

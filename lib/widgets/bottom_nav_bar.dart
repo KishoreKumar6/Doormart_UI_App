@@ -17,11 +17,7 @@ const _kTextMid = Color(0xFFAAAAAA);
 const _kTextDark = Color(0xFF1A1A1A);
 
 class BottomNavBar extends StatelessWidget {
-  const BottomNavBar({
-    super.key,
-    required this.index,
-    required this.onTap,
-  });
+  const BottomNavBar({super.key, required this.index, required this.onTap});
 
   final int index;
   final ValueChanged<int> onTap;
@@ -186,10 +182,10 @@ class _CartFabState extends State<_CartFab>
     vsync: this,
     duration: const Duration(milliseconds: 120),
   );
-  late final Animation<double> _s =
-      Tween<double>(begin: 1.0, end: 0.88).animate(
-    CurvedAnimation(parent: _c, curve: Curves.easeInOut),
-  );
+  late final Animation<double> _s = Tween<double>(
+    begin: 1.0,
+    end: 0.88,
+  ).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut));
 
   @override
   void dispose() {
@@ -260,9 +256,7 @@ class _CartFabState extends State<_CartFab>
                     ),
                     child: Center(
                       child: Text(
-                        widget.cartCount > 99
-                            ? '99+'
-                            : '${widget.cartCount}',
+                        widget.cartCount > 99 ? '99+' : '${widget.cartCount}',
                         style: const TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w900,
@@ -309,10 +303,10 @@ class _NavItemState extends State<_NavItem>
     duration: const Duration(milliseconds: 200),
   );
 
-  late final Animation<double> _scale =
-      Tween<double>(begin: 1.0, end: 1.18).animate(
-    CurvedAnimation(parent: _c, curve: Curves.easeOutBack),
-  );
+  late final Animation<double> _scale = Tween<double>(
+    begin: 1.0,
+    end: 1.18,
+  ).animate(CurvedAnimation(parent: _c, curve: Curves.easeOutBack));
 
   @override
   void didUpdateWidget(_NavItem old) {
@@ -354,9 +348,7 @@ class _NavItemState extends State<_NavItem>
               width: widget.isSelected ? 44 : 28,
               height: 28,
               decoration: BoxDecoration(
-                color: widget.isSelected
-                    ? _kOrangeLight
-                    : Colors.transparent,
+                color: widget.isSelected ? _kOrangeLight : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Center(
@@ -365,9 +357,7 @@ class _NavItemState extends State<_NavItem>
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 180),
                     child: Icon(
-                      widget.isSelected
-                          ? widget.activeIcon
-                          : widget.icon,
+                      widget.isSelected ? widget.activeIcon : widget.icon,
                       key: ValueKey(widget.isSelected),
                       size: 22,
                       color: widget.isSelected ? _kOrange : _kTextMid,
@@ -424,9 +414,12 @@ class _NotchClipper extends CustomClipper<Path> {
 
     // Smooth left entry curve
     path.cubicTo(
-      cx - notchRadius - 4, 0,
-      cx - notchRadius, 6,
-      cx - notchRadius + 2, notchRadius * 0.52,
+      cx - notchRadius - 4,
+      0,
+      cx - notchRadius,
+      6,
+      cx - notchRadius + 2,
+      notchRadius * 0.52,
     );
 
     // Bottom arc of notch
@@ -438,9 +431,12 @@ class _NotchClipper extends CustomClipper<Path> {
 
     // Smooth right exit curve
     path.cubicTo(
-      cx + notchRadius, 6,
-      cx + notchRadius + 4, 0,
-      cx + notchRadius + 16, 0,
+      cx + notchRadius,
+      6,
+      cx + notchRadius + 4,
+      0,
+      cx + notchRadius + 16,
+      0,
     );
 
     path

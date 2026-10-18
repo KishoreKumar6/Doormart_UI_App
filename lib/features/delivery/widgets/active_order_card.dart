@@ -15,7 +15,10 @@ class ActiveOrderCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Order ${order.displayOrderId}', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Order ${order.displayOrderId}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Text('Customer name: ${order.customerName}'),
             Text('Customer phone: ${order.customerPhone}'),

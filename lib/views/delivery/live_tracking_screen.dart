@@ -201,17 +201,17 @@ class _HeroInfoPanel extends StatelessWidget {
               Text(
                 'Order #DM4821',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                    ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
               const Spacer(),
               Text(
                 '12 min',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: const Color(0xFFE8FF72),
-                      fontWeight: FontWeight.w900,
-                    ),
+                  color: const Color(0xFFE8FF72),
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ],
           ),
@@ -219,9 +219,9 @@ class _HeroInfoPanel extends StatelessWidget {
           Text(
             'Anna Nagar pickup to T. Nagar delivery',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: .72),
-                  fontWeight: FontWeight.w600,
-                ),
+              color: Colors.white.withValues(alpha: .72),
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 12),
           LinearProgressIndicator(
@@ -253,9 +253,7 @@ class _TrackingStats extends StatelessWidget {
           .map(
             (stat) => Expanded(
               child: Padding(
-                padding: EdgeInsets.only(
-                  right: stat == stats.last ? 0 : 10,
-                ),
+                padding: EdgeInsets.only(right: stat == stats.last ? 0 : 10),
                 child: _StatTile(stat: stat),
               ),
             ),
@@ -288,17 +286,17 @@ class _StatTile extends StatelessWidget {
           Text(
             stat.value,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFF16231F),
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0,
-                ),
+              color: const Color(0xFF16231F),
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0,
+            ),
           ),
           Text(
             stat.label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: const Color(0xFF66706B),
-                  fontWeight: FontWeight.w700,
-                ),
+              color: const Color(0xFF66706B),
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -324,9 +322,9 @@ class _CurrentDeliveryCard extends StatelessWidget {
           Text(
             'Current delivery',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFF16231F),
-                  fontWeight: FontWeight.w900,
-                ),
+              color: const Color(0xFF16231F),
+              fontWeight: FontWeight.w900,
+            ),
           ),
           const SizedBox(height: 14),
           const _AddressRow(
@@ -449,9 +447,9 @@ class _RouteTimeline extends StatelessWidget {
           Text(
             'Route timeline',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFF16231F),
-                  fontWeight: FontWeight.w900,
-                ),
+              color: const Color(0xFF16231F),
+              fontWeight: FontWeight.w900,
+            ),
           ),
           const SizedBox(height: 14),
           ...steps.map((step) => _TimelineRow(step: step)),
@@ -477,7 +475,9 @@ class _TimelineRow extends StatelessWidget {
             width: 24,
             height: 24,
             decoration: BoxDecoration(
-              color: step.done ? const Color(0xFF173B33) : const Color(0xFFECE7D8),
+              color: step.done
+                  ? const Color(0xFF173B33)
+                  : const Color(0xFFECE7D8),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -679,10 +679,18 @@ class _MapMotionPainter extends CustomPainter {
 
     final drift = math.sin(progress * math.pi * 2) * 12;
     for (var x = -20.0; x < size.width + 20; x += 42) {
-      canvas.drawLine(Offset(x + drift, 0), Offset(x - 34, size.height), gridPaint);
+      canvas.drawLine(
+        Offset(x + drift, 0),
+        Offset(x - 34, size.height),
+        gridPaint,
+      );
     }
     for (var y = 20.0; y < size.height; y += 42) {
-      canvas.drawLine(Offset(0, y - drift), Offset(size.width, y + 18), gridPaint);
+      canvas.drawLine(
+        Offset(0, y - drift),
+        Offset(size.width, y + 18),
+        gridPaint,
+      );
     }
 
     final route = Path()

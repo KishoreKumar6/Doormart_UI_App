@@ -56,6 +56,7 @@ class _ManageDeliveryScreenState extends State<ManageDeliveryScreen> {
   String? _error;
   String _query = '';
   String _filter = 'All';
+  num _globalInitialPaymentAmount = 500;
 
   @override
   void initState() {
@@ -78,16 +79,26 @@ class _ManageDeliveryScreenState extends State<ManageDeliveryScreen> {
     try {
       final users = await context.read<AppState>().adminUsers();
       final delivery = await context.read<AppState>().adminDeliveryPartners();
+      final globalFee = await context
+          .read<AppState>()
+          .getDeliveryInitialPaymentSetting();
       if (!mounted) return;
-      final deliveryByUserId = <String, Map<String, dynamic>>{
-        for (final item in delivery)
-          if (item['user'] is Map<String, dynamic>)
-            (item['user']['_id'] as String? ??
-                    item['user']['id'] as String? ??
-                    ''):
-                item,
-      };
+      final deliveryByUserId = <String, Map<String, dynamic>>{};
+      for (final item in delivery) {
+        final u = item['user'];
+        if (u is Map<String, dynamic>) {
+          final uid = u['_id']?.toString() ?? u['id']?.toString();
+          if (uid != null && uid.isNotEmpty) deliveryByUserId[uid] = item;
+        } else if (u is String && u.isNotEmpty) {
+          deliveryByUserId[u] = item;
+        }
+        final did = item['_id']?.toString() ?? item['id']?.toString();
+        if (did != null && did.isNotEmpty) {
+          deliveryByUserId[did] = item;
+        }
+      }
       setState(() {
+        _globalInitialPaymentAmount = globalFee;
         _allPartners = users
             .where((u) => u.role == UserRoles.deliveryPerson)
             .map(
@@ -115,18 +126,30 @@ class _ManageDeliveryScreenState extends State<ManageDeliveryScreen> {
   // ── Filter / search ───────────────────────────────────────────────────────
   List<_DeliveryPartnerRow> get _filtered {
     var items = List<_DeliveryPartnerRow>.from(_allPartners);
-    if (_filter != 'All') {
-      items = items
-          .where((u) => _statusLabel(u.user, isOnline: u.isOnline) == _filter)
-          .toList();
+    if (_filter == 'Online') {
+      items = items.where((u) => u.isOnline).toList();
+    } else if (_filter == 'Offline') {
+      items = items.where((u) => !u.isOnline).toList();
+    } else if (_filter == 'Fee Paid') {
+      items = items.where((u) => _isPartnerPaid(u.deliveryDoc)).toList();
+    } else if (_filter == 'Fee Unpaid') {
+      items = items.where((u) => !_isPartnerPaid(u.deliveryDoc)).toList();
     }
     if (_query.trim().isNotEmpty) {
       final q = _query.trim().toLowerCase();
       items = items.where((u) {
+        final paymentRef = (u.deliveryDoc?['initialPaymentReference'] ?? '')
+            .toString()
+            .toLowerCase();
+        final paymentStatus = _isPartnerPaid(u.deliveryDoc)
+            ? 'paid'
+            : 'unpaid pending';
         return u.user.name.toLowerCase().contains(q) ||
             u.user.phone.toLowerCase().contains(q) ||
             u.user.id.toLowerCase().contains(q) ||
-            (u.user.email ?? '').toLowerCase().contains(q);
+            (u.user.email ?? '').toLowerCase().contains(q) ||
+            paymentRef.contains(q) ||
+            paymentStatus.contains(q);
       }).toList();
     }
     return items;
@@ -149,12 +172,44 @@ class _ManageDeliveryScreenState extends State<ManageDeliveryScreen> {
     final updated = await showDialog<UserModel>(
       context: context,
       barrierDismissible: false,
-      builder: (_) =>
-          _PartnerDialog(user: partner.user, deliveryDoc: partner.deliveryDoc),
+      builder: (_) => _PartnerDialog(
+        user: partner.user,
+        deliveryDoc: partner.deliveryDoc,
+        fallbackAmount: _globalInitialPaymentAmount,
+      ),
     );
     if (updated == null || !mounted) return;
     await _load();
     _showSnack('${updated.name} updated');
+  }
+
+  // ── Initial Payment Status Update ─────────────────────────────────────────
+  Future<void> _updatePaymentStatus(_DeliveryPartnerRow partner) async {
+    final updated = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _PaymentStatusDialog(
+        partner: partner,
+        fallbackAmount: _globalInitialPaymentAmount,
+      ),
+    );
+    if (updated == true && mounted) {
+      await _load();
+    }
+  }
+
+  // ── Global Initial Payment Setting Dialog ─────────────────────────────────
+  Future<void> _openEditGlobalAmountDialog() async {
+    final updated = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _GlobalInitialPaymentDialog(
+        currentAmount: _globalInitialPaymentAmount,
+      ),
+    );
+    if (updated == true && mounted) {
+      await _load();
+    }
   }
 
   Future<void> _showStatusDetails(_DeliveryPartnerRow partner) async {
@@ -293,6 +348,10 @@ class _ManageDeliveryScreenState extends State<ManageDeliveryScreen> {
     final offline = _allPartners
         .where((u) => _statusLabel(u.user, isOnline: u.isOnline) == 'Offline')
         .length;
+    final paidCount = _allPartners
+        .where((u) => _isPartnerPaid(u.deliveryDoc))
+        .length;
+    final unpaidCount = total - paidCount;
 
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 12, 16, 100 + bottomInset),
@@ -311,7 +370,7 @@ class _ManageDeliveryScreenState extends State<ManageDeliveryScreen> {
           child: Row(
             children: [
               _StatCard(
-                label: 'Total',
+                label: 'Total Fleet',
                 value: '$total',
                 icon: Icons.groups_rounded,
                 color: _kOrange,
@@ -330,8 +389,30 @@ class _ManageDeliveryScreenState extends State<ManageDeliveryScreen> {
                 icon: Icons.wifi_off_rounded,
                 color: const Color(0xFF64748B),
               ),
+              const SizedBox(width: 10),
+              _StatCard(
+                label: 'Fee Paid',
+                value: '$paidCount',
+                icon: Icons.check_circle_rounded,
+                color: const Color(0xFF059669),
+              ),
+              const SizedBox(width: 10),
+              _StatCard(
+                label: 'Fee Pending',
+                value: '$unpaidCount',
+                icon: Icons.pending_actions_rounded,
+                color: const Color(0xFFD97706),
+              ),
             ],
           ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // ── Delivery Partner Payment Settings ──────────────────────────────
+        _GlobalPaymentSettingCard(
+          amount: _globalInitialPaymentAmount,
+          onEdit: _openEditGlobalAmountDialog,
         ),
 
         const SizedBox(height: 16),
@@ -341,7 +422,7 @@ class _ManageDeliveryScreenState extends State<ManageDeliveryScreen> {
           controller: _searchController,
           onChanged: (v) => setState(() => _query = v),
           decoration: InputDecoration(
-            hintText: 'Search by name, ID, phone…',
+            hintText: 'Search by name, ID, phone, ref…',
             prefixIcon: const Icon(Icons.search_rounded, color: _kOrange),
             suffixIcon: _query.isEmpty
                 ? null
@@ -378,21 +459,33 @@ class _ManageDeliveryScreenState extends State<ManageDeliveryScreen> {
           child: Row(
             children: [
               _Chip(
-                label: 'All',
+                label: 'All ($total)',
                 selected: _filter == 'All',
                 onTap: () => setState(() => _filter = 'All'),
               ),
               const SizedBox(width: 8),
               _Chip(
-                label: 'Online',
+                label: 'Online ($online)',
                 selected: _filter == 'Online',
                 onTap: () => setState(() => _filter = 'Online'),
               ),
               const SizedBox(width: 8),
               _Chip(
-                label: 'Offline',
+                label: 'Offline ($offline)',
                 selected: _filter == 'Offline',
                 onTap: () => setState(() => _filter = 'Offline'),
+              ),
+              const SizedBox(width: 8),
+              _Chip(
+                label: 'Fee Paid ($paidCount)',
+                selected: _filter == 'Fee Paid',
+                onTap: () => setState(() => _filter = 'Fee Paid'),
+              ),
+              const SizedBox(width: 8),
+              _Chip(
+                label: 'Fee Unpaid ($unpaidCount)',
+                selected: _filter == 'Fee Unpaid',
+                onTap: () => setState(() => _filter = 'Fee Unpaid'),
               ),
             ],
           ),
@@ -410,7 +503,10 @@ class _ManageDeliveryScreenState extends State<ManageDeliveryScreen> {
               child: _PartnerCard(
                 user: u.user,
                 isOnline: u.isOnline,
+                deliveryDoc: u.deliveryDoc,
+                fallbackAmount: _globalInitialPaymentAmount,
                 onShowStatus: () => _showStatusDetails(u),
+                onEditPayment: () => _updatePaymentStatus(u),
                 onApprove: u.user.approvalStatus.toLowerCase() == 'pending'
                     ? () => _approvePartner(u.user)
                     : null,
@@ -618,7 +714,10 @@ class _PartnerCard extends StatelessWidget {
   const _PartnerCard({
     required this.user,
     required this.isOnline,
+    this.deliveryDoc,
+    this.fallbackAmount = 500,
     required this.onShowStatus,
+    required this.onEditPayment,
     this.onApprove,
     this.onReject,
     required this.onEdit,
@@ -626,7 +725,10 @@ class _PartnerCard extends StatelessWidget {
   });
   final UserModel user;
   final bool isOnline;
+  final Map<String, dynamic>? deliveryDoc;
+  final num fallbackAmount;
   final VoidCallback onShowStatus;
+  final VoidCallback onEditPayment;
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
   final VoidCallback onEdit;
@@ -637,6 +739,15 @@ class _PartnerCard extends StatelessWidget {
     final isCompact = MediaQuery.sizeOf(context).width < 430;
     final status = _statusLabel(user, isOnline: isOnline);
     final vehicle = _vehicleFor(user);
+    final isPaid = _isPartnerPaid(deliveryDoc);
+    final feeAmount = isPaid
+        ? _partnerInitialAmount(deliveryDoc, fallbackAmount)
+        : fallbackAmount;
+    final paymentRef = (deliveryDoc?['initialPaymentReference'] ?? '')
+        .toString();
+    final paymentDateStr = deliveryDoc?['initialPaymentCompletedAt'] != null
+        ? _formatDate(deliveryDoc!['initialPaymentCompletedAt'])
+        : '';
     final statusColor = switch (status) {
       'Online' => const Color(0xFF16A34A),
       _ => const Color(0xFF64748B),
@@ -734,23 +845,79 @@ class _PartnerCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: statusBg,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              status,
-                              style: TextStyle(
-                                color: statusColor,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 11,
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: statusBg,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  status,
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 11,
+                                  ),
+                                ),
                               ),
-                            ),
+                              // Payment Badge
+                              InkWell(
+                                onTap: onEditPayment,
+                                borderRadius: BorderRadius.circular(999),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isPaid
+                                        ? const Color(0xFFECFDF5)
+                                        : const Color(0xFFFFFBEB),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: isPaid
+                                          ? const Color(0xFFA7F3D0)
+                                          : const Color(0xFFFDE68A),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        isPaid
+                                            ? Icons.check_circle_rounded
+                                            : Icons.schedule_rounded,
+                                        size: 12,
+                                        color: isPaid
+                                            ? const Color(0xFF047857)
+                                            : const Color(0xFFB45309),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        isPaid
+                                            ? 'PAID • ₹${feeAmount.toInt()}'
+                                            : 'UNPAID • ₹${feeAmount.toInt()}',
+                                        style: TextStyle(
+                                          color: isPaid
+                                              ? const Color(0xFF047857)
+                                              : const Color(0xFFB45309),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -760,9 +927,11 @@ class _PartnerCard extends StatelessWidget {
                       const SizedBox(width: 10),
                       _PartnerActionButtons(
                         user: user,
+                        isPaid: isPaid,
                         onApprove: onApprove,
                         onReject: onReject,
                         onShowStatus: onShowStatus,
+                        onEditPayment: onEditPayment,
                         onEdit: onEdit,
                         onDelete: onDelete,
                         vertical: true,
@@ -776,9 +945,11 @@ class _PartnerCard extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: _PartnerActionButtons(
                       user: user,
+                      isPaid: isPaid,
                       onApprove: onApprove,
                       onReject: onReject,
                       onShowStatus: onShowStatus,
+                      onEditPayment: onEditPayment,
                       onEdit: onEdit,
                       onDelete: onDelete,
                       vertical: false,
@@ -786,6 +957,182 @@ class _PartnerCard extends StatelessWidget {
                   ),
                 ],
               ],
+            ),
+          ),
+
+          // ── Initial Payment Bar on Card ──
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isPaid ? const Color(0xFFF9FDF9) : const Color(0xFFFFFDF5),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isPaid
+                    ? const Color(0xFFDCFCE7)
+                    : const Color(0xFFFEF3C7),
+              ),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isStacked = constraints.maxWidth < 380;
+
+                final iconWidget = Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: isPaid
+                        ? const Color(0xFFDCFCE7)
+                        : const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    isPaid
+                        ? Icons.verified_rounded
+                        : Icons.pending_actions_rounded,
+                    size: 15,
+                    color: isPaid
+                        ? const Color(0xFF15803D)
+                        : const Color(0xFFB45309),
+                  ),
+                );
+
+                final infoWidget = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 5,
+                      runSpacing: 2,
+                      children: [
+                        Text(
+                          isPaid ? 'Initial Fee Paid' : 'Initial Fee Required',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: isPaid
+                                ? const Color(0xFF166534)
+                                : const Color(0xFF92400E),
+                          ),
+                        ),
+                        Text(
+                          '₹${feeAmount.toInt()}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            color: isPaid
+                                ? const Color(0xFF15803D)
+                                : const Color(0xFFB45309),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    if (isPaid && paymentRef.isNotEmpty)
+                      Text(
+                        'Ref: $paymentRef${paymentDateStr.isNotEmpty ? ' • $paymentDateStr' : ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                          color: Color(0xFF15803D),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      )
+                    else if (!isPaid)
+                      const Text(
+                        'Partner cannot go Online until onboarding fee is paid',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Color(0xFFB45309),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
+                );
+
+                final buttonWidget = FilledButton.tonal(
+                  style: FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: isPaid
+                        ? const Color(0xFFE8F5E9)
+                        : const Color(0xFF15803D),
+                    foregroundColor: isPaid
+                        ? const Color(0xFF166534)
+                        : Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: onEditPayment,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isPaid
+                            ? Icons.verified_rounded
+                            : Icons.check_circle_rounded,
+                        size: 13,
+                        color: isPaid ? const Color(0xFF166534) : Colors.white,
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          isPaid ? 'Payment Completed' : 'Mark as Paid',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: isPaid
+                                ? const Color(0xFF166534)
+                                : Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (isStacked) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          iconWidget,
+                          const SizedBox(width: 10),
+                          Expanded(child: infoWidget),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: buttonWidget,
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    iconWidget,
+                    const SizedBox(width: 10),
+                    Expanded(child: infoWidget),
+                    const SizedBox(width: 8),
+                    buttonWidget,
+                  ],
+                );
+              },
             ),
           ),
 
@@ -813,7 +1160,7 @@ class _PartnerCard extends StatelessWidget {
                 if ((user.email ?? '').isNotEmpty)
                   ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxWidth: isCompact ? 240 : 320,
+                      maxWidth: isCompact ? 220 : 320,
                     ),
                     child: _PartnerMetaChip(
                       icon: Icons.email_rounded,
@@ -834,7 +1181,9 @@ class _PartnerCard extends StatelessWidget {
 class _PartnerActionButtons extends StatelessWidget {
   const _PartnerActionButtons({
     required this.user,
+    required this.isPaid,
     required this.onShowStatus,
+    required this.onEditPayment,
     required this.onEdit,
     required this.onDelete,
     required this.vertical,
@@ -843,7 +1192,9 @@ class _PartnerActionButtons extends StatelessWidget {
   });
 
   final UserModel user;
+  final bool isPaid;
   final VoidCallback onShowStatus;
+  final VoidCallback onEditPayment;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback? onApprove;
@@ -876,6 +1227,15 @@ class _PartnerActionButtons extends StatelessWidget {
         bg: const Color(0xFFEFF2FF),
         tooltip: 'Show status',
         onTap: onShowStatus,
+      ),
+      _ActionBtn(
+        icon: Icons.payments_rounded,
+        color: isPaid ? const Color(0xFF15803D) : const Color(0xFFD97706),
+        bg: isPaid ? const Color(0xFFEAF7ED) : const Color(0xFFFFFBEB),
+        tooltip: isPaid
+            ? 'Payment Completed (View Details)'
+            : 'Mark Initial Payment as Paid',
+        onTap: onEditPayment,
       ),
       _ActionBtn(
         icon: Icons.edit_rounded,
@@ -924,6 +1284,7 @@ class _PartnerMetaChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      constraints: const BoxConstraints(maxWidth: 240),
       padding: background == Colors.transparent
           ? EdgeInsets.zero
           : const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1297,7 +1658,7 @@ class _StatusLogCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text('Started: ${_formatDateTime(startedAt)}'),
-          Text('Ended: ${active ? 'In progress' : _formatDateTime(endedAt!)}'),
+          Text('Ended: ${active ? 'In progress' : _formatDateTime(endedAt)}'),
         ],
       ),
     );
@@ -1692,9 +2053,14 @@ class _ErrorView extends StatelessWidget {
 // Parent updates _allPartners instantly without reload
 
 class _PartnerDialog extends StatefulWidget {
-  const _PartnerDialog({this.user, this.deliveryDoc});
+  const _PartnerDialog({
+    this.user,
+    this.deliveryDoc,
+    this.fallbackAmount = 500,
+  });
   final UserModel? user;
   final Map<String, dynamic>? deliveryDoc;
+  final num fallbackAmount;
 
   @override
   State<_PartnerDialog> createState() => _PartnerDialogState();
@@ -1722,6 +2088,10 @@ class _PartnerDialogState extends State<_PartnerDialog> {
     text: widget.deliveryDoc?['licenseNumber']?.toString() ?? '',
   );
 
+  late final bool _origPaid;
+  late String _paymentStatus;
+  late final TextEditingController _paymentRefCtrl;
+
   Uint8List? _avatarBytes;
   bool _uploading = false;
   String? _uploadingField;
@@ -1740,6 +2110,14 @@ class _PartnerDialogState extends State<_PartnerDialog> {
   @override
   void initState() {
     super.initState();
+    final rawStatus = widget.deliveryDoc?['initialPaymentStatus']
+        ?.toString()
+        .toUpperCase();
+    _origPaid = (rawStatus == 'PAID');
+    _paymentStatus = _origPaid ? 'PAID' : 'UNPAID';
+    _paymentRefCtrl = TextEditingController(
+      text: widget.deliveryDoc?['initialPaymentReference']?.toString() ?? '',
+    );
     _panCardUrl = widget.deliveryDoc?['panCardUrl']?.toString();
     _licenseCardUrl = widget.deliveryDoc?['licenseCardUrl']?.toString();
     _aadhaarCardUrl = widget.deliveryDoc?['aadhaarCardUrl']?.toString();
@@ -1762,6 +2140,7 @@ class _PartnerDialogState extends State<_PartnerDialog> {
     _confirmCtrl.dispose();
     _vehicleCtrl.dispose();
     _licenseCtrl.dispose();
+    _paymentRefCtrl.dispose();
     super.dispose();
   }
 
@@ -1940,6 +2319,28 @@ class _PartnerDialogState extends State<_PartnerDialog> {
           panCardUrl: _panCardUrl,
           aadhaarCardUrl: _aadhaarCardUrl,
         );
+
+        final deliveryId =
+            widget.deliveryDoc?['_id']?.toString() ??
+            widget.deliveryDoc?['id']?.toString() ??
+            widget.user!.id;
+        final newRefStr = _paymentRefCtrl.text.trim();
+
+        // Only allow updating from UNPAID -> PAID (completed payments cannot be revoked)
+        if (!_origPaid && _paymentStatus == 'PAID') {
+          try {
+            await state.updateDeliveryPaymentStatus(
+              deliveryPersonId: deliveryId,
+              status: 'PAID',
+              reference: newRefStr.isEmpty ? null : newRefStr,
+              notes: 'Marked as PAID via Partner Edit dialog',
+            );
+          } catch (e) {
+            debugPrint(
+              '[ManageDelivery] Failed to update payment status in edit dialog: $e',
+            );
+          }
+        }
       }
 
       if (!mounted) return;
@@ -2196,6 +2597,196 @@ class _PartnerDialogState extends State<_PartnerDialog> {
                 icon: Icons.lock_outline_rounded,
                 obscureText: true,
               ),
+
+              if (_isEdit) ...[
+                const SizedBox(height: 16),
+                _SectionHeader(
+                  title: 'Initial Onboarding Fee',
+                  subtitle: _origPaid
+                      ? 'Payment has been completed and verified'
+                      : 'Authorize initial onboarding payment',
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: (_origPaid || _paymentStatus == 'PAID')
+                          ? const Color(0xFF86EFAC)
+                          : const Color(0xFFFDBA74),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            (_origPaid || _paymentStatus == 'PAID')
+                                ? Icons.check_circle_rounded
+                                : Icons.pending_actions_rounded,
+                            color: (_origPaid || _paymentStatus == 'PAID')
+                                ? const Color(0xFF16A34A)
+                                : const Color(0xFFEA580C),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Payment Status',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              color: _kTextDark,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (_origPaid)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDCFCE7),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: const Color(0xFFA7F3D0),
+                                ),
+                              ),
+                              child: const Text(
+                                'PAID',
+                                style: TextStyle(
+                                  color: Color(0xFF15803D),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            )
+                          else
+                            SegmentedButton<String>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: 'UNPAID',
+                                  label: Text(
+                                    'Unpaid',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                ButtonSegment(
+                                  value: 'PAID',
+                                  label: Text(
+                                    'Mark as Paid',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              selected: {_paymentStatus},
+                              onSelectionChanged: (val) {
+                                setState(() {
+                                  _paymentStatus = val.first;
+                                });
+                              },
+                              style: SegmentedButton.styleFrom(
+                                selectedBackgroundColor:
+                                    _paymentStatus == 'PAID'
+                                    ? const Color(0xFFDCFCE7)
+                                    : const Color(0xFFFFEDD5),
+                                selectedForegroundColor:
+                                    _paymentStatus == 'PAID'
+                                    ? const Color(0xFF16A34A)
+                                    : const Color(0xFFEA580C),
+                                textStyle: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Read-only Fee Amount Display
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _origPaid
+                                  ? 'Onboarding Fee (Paid)'
+                                  : 'Onboarding Fee (Global Setting)',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _kTextMid,
+                              ),
+                            ),
+                            Text(
+                              '₹${_partnerInitialAmount(widget.deliveryDoc).toInt()}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                color: _kTextDark,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_origPaid) ...[
+                        const SizedBox(height: 8),
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.lock_outline_rounded,
+                              size: 14,
+                              color: Color(0xFF15803D),
+                            ),
+                            SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'Completed onboarding payments cannot be changed to unpaid.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF15803D),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ] else if (_paymentStatus == 'PAID') ...[
+                        const SizedBox(height: 12),
+                        _DialogField(
+                          controller: _paymentRefCtrl,
+                          label: 'Payment Reference / Order ID (optional)',
+                          icon: Icons.tag_rounded,
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Marking as Paid will authorize this partner to go online. This action is permanent.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFFB45309),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
 
               // ── Save error ────────────────────────────────────────
               if (_saveError != null)
@@ -2848,4 +3439,977 @@ String _vehicleFor(UserModel user) {
   if (n.contains('van')) return 'Van';
   if (n.contains('scooter')) return 'E-Scooter';
   return 'E-Bike';
+}
+
+bool _isPartnerPaid(Map<String, dynamic>? deliveryDoc) {
+  final status = (deliveryDoc?['initialPaymentStatus'] ?? '')
+      .toString()
+      .toUpperCase();
+  return status == 'PAID';
+}
+
+num _partnerInitialAmount(
+  Map<String, dynamic>? deliveryDoc, [
+  num fallback = 500,
+]) {
+  final raw = deliveryDoc?['initialPaymentAmount'];
+  if (raw is num && raw > 0) return raw;
+  if (raw != null) {
+    final parsed = num.tryParse(raw.toString());
+    if (parsed != null && parsed > 0) return parsed;
+  }
+  return fallback;
+}
+
+String _formatDate(dynamic date) {
+  if (date == null) return '';
+  final dt = date is DateTime ? date : DateTime.tryParse(date.toString());
+  if (dt == null) return date.toString();
+  final local = dt.toLocal();
+  final d = local.day.toString().padLeft(2, '0');
+  final m = local.month.toString().padLeft(2, '0');
+  final y = local.year;
+  final hour = local.hour > 12
+      ? local.hour - 12
+      : (local.hour == 0 ? 12 : local.hour);
+  final min = local.minute.toString().padLeft(2, '0');
+  final ampm = local.hour >= 12 ? 'PM' : 'AM';
+  return '$d/$m/$y $hour:$min $ampm';
+}
+
+// ─── Global Initial Payment Setting Card ──────────────────────────────────────
+
+class _GlobalPaymentSettingCard extends StatelessWidget {
+  const _GlobalPaymentSettingCard({required this.amount, required this.onEdit});
+
+  final num amount;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 360;
+        return Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 12 : 18,
+            vertical: isCompact ? 12 : 14,
+          ),
+          decoration: BoxDecoration(
+            color: _kCard,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _kBorder),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(isCompact ? 10 : 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFDBEAFE)),
+                ),
+                child: Icon(
+                  Icons.tune_rounded,
+                  color: const Color(0xFF2563EB),
+                  size: isCompact ? 20 : 24,
+                ),
+              ),
+              SizedBox(width: isCompact ? 10 : 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      runSpacing: 2,
+                      children: [
+                        const Text(
+                          'Initial Payment',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: _kTextDark,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.all(Radius.circular(6)),
+                          ),
+                          child: const Text(
+                            'GLOBAL',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF2563EB),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '₹${amount.toInt()}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: _kTextDark,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Standard onboarding fee for all new delivery partners',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: _kTextMid,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: isCompact ? 8 : 12),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _kTextDark,
+                  side: const BorderSide(color: Color(0xFFD1D5DB)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isCompact ? 10 : 14,
+                    vertical: isCompact ? 8 : 10,
+                  ),
+                ),
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_rounded, size: 16),
+                label: const Text(
+                  'Edit',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─── Global Initial Payment Setting Dialog ────────────────────────────────────
+
+class _GlobalInitialPaymentDialog extends StatefulWidget {
+  const _GlobalInitialPaymentDialog({required this.currentAmount});
+  final num currentAmount;
+
+  @override
+  State<_GlobalInitialPaymentDialog> createState() =>
+      _GlobalInitialPaymentDialogState();
+}
+
+class _GlobalInitialPaymentDialogState
+    extends State<_GlobalInitialPaymentDialog> {
+  late final TextEditingController _amountCtrl;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountCtrl = TextEditingController(
+      text: widget.currentAmount.toInt().toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final text = _amountCtrl.text.trim();
+    final amount = num.tryParse(text);
+    if (amount == null || amount < 0) {
+      setState(() => _error = 'Please enter a valid amount (₹0 or more)');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      await context.read<AppState>().updateDeliveryInitialPaymentSetting(
+        amount,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Initial payment amount updated successfully.'),
+          backgroundColor: const Color(0xFF047857),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+      Navigator.of(context, rootNavigator: true).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _saving = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.settings_suggest_rounded,
+              color: Color(0xFF2563EB),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Initial Payment Amount',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+                color: _kTextDark,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, size: 20),
+            onPressed: () => Navigator.pop(context, false),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Configures the global onboarding fee for all new delivery partner registrations.',
+              style: TextStyle(fontSize: 12, color: _kTextMid),
+            ),
+            const SizedBox(height: 16),
+            _DialogField(
+              controller: _amountCtrl,
+              label: 'Initial Payment Amount (₹)',
+              icon: Icons.currency_rupee_rounded,
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Current value: ₹${widget.currentAmount.toInt()}',
+              style: const TextStyle(
+                fontSize: 11,
+                color: _kTextMid,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  color: Color(0xFFDC2626),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          child: const Text('Cancel', style: TextStyle(color: _kTextMid)),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: _kOrange,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text(
+                  'Save Changes',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Payment Status Dialog ───────────────────────────────────────────────────
+
+class _PaymentStatusDialog extends StatefulWidget {
+  const _PaymentStatusDialog({
+    required this.partner,
+    this.fallbackAmount = 500,
+  });
+
+  final _DeliveryPartnerRow partner;
+  final num fallbackAmount;
+
+  @override
+  State<_PaymentStatusDialog> createState() => _PaymentStatusDialogState();
+}
+
+class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
+  late final bool _isCurrentlyPaid;
+  late final num _effectiveAmount;
+  late final TextEditingController _referenceCtrl;
+  late final TextEditingController _notesCtrl;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _isCurrentlyPaid = _isPartnerPaid(widget.partner.deliveryDoc);
+    _effectiveAmount = _partnerInitialAmount(
+      widget.partner.deliveryDoc,
+      widget.fallbackAmount,
+    );
+    _referenceCtrl = TextEditingController(
+      text:
+          widget.partner.deliveryDoc?['initialPaymentReference']?.toString() ??
+          '',
+    );
+    _notesCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _referenceCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final docId =
+          widget.partner.deliveryDoc?['_id']?.toString() ??
+          widget.partner.deliveryDoc?['id']?.toString() ??
+          widget.partner.user.id;
+
+      await context.read<AppState>().updateDeliveryPaymentStatus(
+        deliveryPersonId: docId,
+        status: 'PAID',
+        amount: _effectiveAmount,
+        reference: _referenceCtrl.text.trim().isEmpty
+            ? null
+            : _referenceCtrl.text.trim(),
+        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Initial payment marked as paid successfully.'),
+          backgroundColor: const Color(0xFF047857),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+      Navigator.of(context, rootNavigator: true).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _saving = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final isMobile = size.width < 500;
+    final user = widget.partner.user;
+    final shortId = '#${user.id.substring(0, 8).toUpperCase()}';
+    final paymentRef =
+        widget.partner.deliveryDoc?['initialPaymentReference']?.toString() ??
+        '';
+    final paymentDateStr =
+        widget.partner.deliveryDoc?['initialPaymentCompletedAt'] != null
+        ? _formatDate(widget.partner.deliveryDoc!['initialPaymentCompletedAt'])
+        : '';
+    final paymentSource =
+        widget.partner.deliveryDoc?['initialPaymentSource']?.toString() ?? '';
+
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 24,
+        vertical: 24,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _isCurrentlyPaid
+                  ? const Color(0xFFECFDF5)
+                  : const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              _isCurrentlyPaid
+                  ? Icons.verified_rounded
+                  : Icons.payments_rounded,
+              color: _isCurrentlyPaid
+                  ? const Color(0xFF047857)
+                  : const Color(0xFFD97706),
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isCurrentlyPaid
+                      ? 'Initial Payment Details'
+                      : 'Mark Initial Payment as Paid',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: _kTextDark,
+                  ),
+                ),
+                Text(
+                  _isCurrentlyPaid
+                      ? 'Verified partner onboarding payment'
+                      : 'Authorize partner to start working and go online',
+                  style: const TextStyle(fontSize: 12, color: _kTextMid),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () => Navigator.pop(context, false),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: isMobile ? double.maxFinite : 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Partner Card Summary
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFF3F4F6)),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: _kOrangeLight,
+                      child: Text(
+                        user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          color: _kOrange,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              color: _kTextDark,
+                            ),
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 2,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                shortId,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                  color: _kTextMid,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                user.phone,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: _kTextMid,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _isCurrentlyPaid
+                            ? const Color(0xFFECFDF5)
+                            : const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: _isCurrentlyPaid
+                              ? const Color(0xFFA7F3D0)
+                              : const Color(0xFFFDE68A),
+                        ),
+                      ),
+                      child: Text(
+                        _isCurrentlyPaid ? 'PAID' : 'UNPAID',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: _isCurrentlyPaid
+                              ? const Color(0xFF047857)
+                              : const Color(0xFFB45309),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Read-only Fee Container
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                      ),
+                      child: const Icon(
+                        Icons.currency_rupee_rounded,
+                        size: 20,
+                        color: _kTextDark,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _isCurrentlyPaid
+                                ? 'Onboarding Fee Paid'
+                                : 'Initial Payment Amount',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: _kTextMid,
+                            ),
+                          ),
+                          Text(
+                            '₹${_effectiveAmount.toInt()}',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: _kTextDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Text(
+                        _isCurrentlyPaid ? 'VERIFIED' : 'GLOBAL SETTING',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: _kTextMid,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              if (_isCurrentlyPaid) ...[
+                // Details for already paid partner
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.check_circle_rounded,
+                            size: 18,
+                            color: Color(0xFF047857),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Payment Complete & Verified',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF047857),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'This delivery partner has fulfilled the onboarding payment requirement and is eligible to accept delivery orders and go online.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          height: 1.35,
+                          color: Color(0xFF065F46),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Divider(height: 1, color: Color(0xFFA7F3D0)),
+                      const SizedBox(height: 10),
+                      if (paymentRef.isNotEmpty) ...[
+                        Row(
+                          children: [
+                            const Text(
+                              'Reference / ID: ',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF065F46),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                paymentRef,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF047857),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      if (paymentDateStr.isNotEmpty) ...[
+                        Row(
+                          children: [
+                            const Text(
+                              'Payment Date: ',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF065F46),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                paymentDateStr,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF047857),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      if (paymentSource.isNotEmpty) ...[
+                        Row(
+                          children: [
+                            const Text(
+                              'Payment Source: ',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF065F46),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                paymentSource,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF047857),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      const SizedBox(height: 4),
+                      const Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.lock_outline_rounded,
+                            size: 13,
+                            color: Color(0xFF047857),
+                          ),
+                          SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Completed onboarding payments cannot be reverted to unpaid.',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF047857),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                // Unpaid partner - prompt & inputs
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline_rounded,
+                        size: 18,
+                        color: Color(0xFFD97706),
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Are you sure you want to mark this partner as Paid?',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF92400E),
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'This confirms onboarding payment and authorizes the partner to go online. Note: Once marked as Paid, this payment cannot be reverted to unpaid.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                height: 1.35,
+                                color: Color(0xFF78350F),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                _DialogField(
+                  controller: _referenceCtrl,
+                  label: 'Payment Reference / Order ID (Optional)',
+                  icon: Icons.receipt_long_rounded,
+                ),
+
+                const SizedBox(height: 12),
+
+                _DialogField(
+                  controller: _notesCtrl,
+                  label: 'Admin Audit Notes (Optional)',
+                  icon: Icons.edit_note_rounded,
+                ),
+              ],
+
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  style: const TextStyle(
+                    color: Color(0xFFDC2626),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        if (_isCurrentlyPaid)
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: _kTextDark,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Close',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          )
+        else ...[
+          TextButton(
+            onPressed: _saving ? null : () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: _kTextMid)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: _saving ? null : _submit,
+            child: _saving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text(
+                    'Confirm & Mark as Paid',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+          ),
+        ],
+      ],
+    );
+  }
 }

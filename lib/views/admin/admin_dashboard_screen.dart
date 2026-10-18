@@ -459,25 +459,53 @@ class _AdminDrawer extends StatelessWidget {
   }
 }
 
-class _AdminOverviewPanel extends StatelessWidget {
+class _AdminOverviewPanel extends StatefulWidget {
   const _AdminOverviewPanel({required this.onOpenMenu});
 
   final VoidCallback onOpenMenu;
+
+  @override
+  State<_AdminOverviewPanel> createState() => _AdminOverviewPanelState();
+}
+
+class _AdminOverviewPanelState extends State<_AdminOverviewPanel> {
+  late Future<void> _loadFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFuture = _loadOverview();
+  }
+
+  Future<void> _loadOverview() async {
+    final state = context.read<AppState>();
+    await Future.wait<void>([
+      state.loadAdminOrders(),
+      state.loadProducts(),
+    ]).timeout(const Duration(seconds: 15));
+  }
+
+  Future<void> _reload() async {
+    setState(() {
+      _loadFuture = _loadOverview();
+    });
+    await _loadFuture;
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       children: [
-        _HeroCard(onOpenMenu: onOpenMenu),
+        _HeroCard(onOpenMenu: widget.onOpenMenu, onRefresh: _reload),
         const SizedBox(height: 16),
         FutureBuilder<void>(
-          future: Future.microtask(
-            () => context.read<AppState>().loadAdminOrders(),
-          ),
+          future: _loadFuture,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
-              return _StatusCard(message: snapshot.error.toString());
+              return _StatusCard(
+                message: 'Unable to load overview: ${snapshot.error}',
+              );
             }
             if (snapshot.connectionState == ConnectionState.waiting &&
                 context.read<AppState>().adminOrders.isEmpty) {
@@ -502,9 +530,10 @@ class _AdminOverviewPanel extends StatelessWidget {
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.onOpenMenu});
+  const _HeroCard({required this.onOpenMenu, required this.onRefresh});
 
   final VoidCallback onOpenMenu;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -555,9 +584,7 @@ class _HeroCard extends StatelessWidget {
               left: 68,
               child: _RefreshButton(
                 onRefresh: () async {
-                  final state = context.read<AppState>();
-                  await state.loadAdminOrders();
-                  await state.loadProducts();
+                  await onRefresh();
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Dashboard refreshed')),

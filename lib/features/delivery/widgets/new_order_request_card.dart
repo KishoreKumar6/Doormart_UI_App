@@ -23,7 +23,8 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
 
   @override
   Widget build(BuildContext context) {
-    final accepted = widget.order.status == DeliveryOrderStatus.accepted ||
+    final accepted =
+        widget.order.status == DeliveryOrderStatus.accepted ||
         widget.order.status == DeliveryOrderStatus.pickedUp ||
         widget.order.status == DeliveryOrderStatus.outForDelivery ||
         widget.order.status == DeliveryOrderStatus.delivered;
@@ -38,12 +39,16 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
                 Expanded(
                   child: Text(
                     'Order ${widget.order.displayOrderId}',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 _StatusBadge(
                   label: accepted ? 'Accepted' : 'Waiting',
-                  color: accepted ? const Color(0xFF0F9D58) : const Color(0xFFE8541A),
+                  color: accepted
+                      ? const Color(0xFF0F9D58)
+                      : const Color(0xFFE8541A),
                 ),
               ],
             ),
@@ -57,7 +62,9 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
             const SizedBox(height: 10),
             Text(
               'Ordered Items',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             ...widget.order.items.map(
@@ -67,13 +74,32 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
               ),
             ),
             const SizedBox(height: 4),
-            const SizedBox(height: 4),
-            _SummaryLine(label: 'Order Amount', value: '₹${widget.order.totalAmount.toStringAsFixed(2)}'),
-            _SummaryLine(label: 'Payment', value: widget.order.paymentType),
+            _SummaryLine(
+              label: 'Items subtotal',
+              value: '₹${widget.order.itemSubtotal.toStringAsFixed(2)}',
+            ),
+            _SummaryLine(
+              label: 'Delivery fee',
+              value: '₹${widget.order.deliveryFee.toStringAsFixed(2)}',
+            ),
+            if (widget.order.gstAmount > 0)
+              _SummaryLine(
+                label: 'GST',
+                value: '₹${widget.order.gstAmount.toStringAsFixed(2)}',
+              ),
+            _SummaryLine(
+              label: 'Customer total',
+              value: '₹${widget.order.totalAmount.toStringAsFixed(2)}',
+            ),
+            _SummaryLine(
+              label: 'Payment',
+              value: widget.order.isCod ? 'Cash on delivery' : 'Paid online',
+            ),
             if (widget.order.isCod)
               _SummaryLine(
-                label: 'COD Amount',
-                value: '₹${widget.order.codAmount?.toStringAsFixed(2) ?? widget.order.totalAmount.toStringAsFixed(2)}',
+                label: 'Collect from customer',
+                value:
+                    '₹${widget.order.codAmount?.toStringAsFixed(2) ?? widget.order.totalAmount.toStringAsFixed(2)}',
               ),
             const SizedBox(height: 12),
             Row(
@@ -89,7 +115,11 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
                   child: ElevatedButton(
                     onPressed: _busy ? null : _accept,
                     child: _busy
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Text('Accept'),
                   ),
                 ),
@@ -107,7 +137,9 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (message != null && message.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -117,7 +149,9 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (message != null && message.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -186,7 +220,7 @@ class _OrderedItemRow extends StatelessWidget {
                   ? Image.network(
                       imageUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
+                      errorBuilder: (_, _, _) => const Icon(
                         Icons.shopping_bag_outlined,
                         color: Color(0xFFE8541A),
                       ),
@@ -244,29 +278,43 @@ class _SummaryLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Color(0xFF6B7280),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Color(0xFF111827),
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked = constraints.maxWidth < 280;
+        const labelStyle = TextStyle(
+          color: Color(0xFF6B7280),
+          fontWeight: FontWeight.w700,
+        );
+        const valueStyle = TextStyle(
+          color: Color(0xFF111827),
+          fontWeight: FontWeight.w900,
+        );
+        return Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: stacked
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: labelStyle),
+                    const SizedBox(height: 2),
+                    Text(value, style: valueStyle),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(child: Text(label, style: labelStyle)),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        value,
+                        textAlign: TextAlign.right,
+                        style: valueStyle,
+                      ),
+                    ),
+                  ],
+                ),
+        );
+      },
     );
   }
 }

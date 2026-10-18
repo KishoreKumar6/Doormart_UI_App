@@ -357,6 +357,7 @@ class _ProductSheetState extends State<_ProductSheet>
                           product: product,
                           selectedUnit: selectedVariant.unit,
                           selectedPrice: selectedPrice,
+                          taxPercent: product.tax,
                           selectedStock: selectedStock,
                         ),
                       ],
@@ -824,6 +825,7 @@ class _QuantityCartBar extends StatelessWidget {
     required this.product,
     required this.selectedUnit,
     required this.selectedPrice,
+    required this.taxPercent,
     required this.selectedStock,
   });
 
@@ -835,11 +837,14 @@ class _QuantityCartBar extends StatelessWidget {
   final ProductModel product;
   final String selectedUnit;
   final double selectedPrice;
+  final double taxPercent;
   final int selectedStock;
 
   @override
   Widget build(BuildContext context) {
-    final totalPrice = selectedPrice * quantity;
+    final baseTotal = selectedPrice * quantity;
+    final gstAmount = baseTotal * taxPercent / 100;
+    final totalPrice = baseTotal + gstAmount;
     final canIncrease = selectedStock > 0 ? quantity < selectedStock : false;
     final canAdd = selectedStock > 0;
 
@@ -895,6 +900,7 @@ class _QuantityCartBar extends StatelessWidget {
             adding: adding,
             totalPrice: totalPrice,
             unitLabel: selectedUnit,
+            taxPercent: taxPercent,
             enabled: canAdd,
             onTap: onAddToCart,
           ),
@@ -1105,12 +1111,14 @@ class _AddToCartButton extends StatefulWidget {
     required this.adding,
     required this.totalPrice,
     required this.unitLabel,
+    required this.taxPercent,
     required this.enabled,
     required this.onTap,
   });
   final bool adding;
   final double totalPrice;
   final String unitLabel;
+  final double taxPercent;
   final bool enabled;
   final VoidCallback onTap;
 
@@ -1137,6 +1145,7 @@ class _AddToCartButtonState extends State<_AddToCartButton>
 
   @override
   Widget build(BuildContext context) {
+    final taxLabel = widget.taxPercent > 0 ? 'incl. GST' : 'GST included';
     return GestureDetector(
       onTapDown: widget.adding || !widget.enabled ? null : (_) => _c.forward(),
       onTapUp: widget.adding || !widget.enabled
@@ -1206,7 +1215,7 @@ class _AddToCartButtonState extends State<_AddToCartButton>
                         ],
                       ),
                       Text(
-                        'Rs ${widget.totalPrice.toStringAsFixed(0)} • ${widget.unitLabel}',
+                        'Rs ${widget.totalPrice.toStringAsFixed(2)} • ${widget.unitLabel} • $taxLabel',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

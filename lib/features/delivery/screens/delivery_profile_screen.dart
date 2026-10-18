@@ -6,10 +6,9 @@ import '../../../providers/app_state.dart';
 import '../providers/delivery_provider.dart';
 import '../widgets/delivery_sidebar_drawer.dart';
 import 'delivery_login_screen.dart';
-import 'delivery_history_screen.dart';
-import 'delivery_home_screen.dart';
 import 'delivery_status_details_screen.dart';
 import 'delivery_earnings_screen.dart';
+import 'delivery_initial_payment_screen.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const _kOrange = Color(0xFFE8541A);
@@ -29,15 +28,30 @@ class DeliveryProfileScreen extends StatefulWidget {
 }
 
 class _DeliveryProfileScreenState extends State<DeliveryProfileScreen> {
-  int _navIndex = 3;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final appState = context.read<AppState>();
       final provider = context.read<DeliveryProvider>();
+      if ((provider.authToken == null || provider.authToken!.isEmpty) &&
+          appState.token != null &&
+          appState.token!.isNotEmpty) {
+        provider.authToken = appState.token;
+      }
+      if (provider.authUser == null && appState.user != null) {
+        provider.authUser = appState.user!.toJson();
+      }
       await provider.bootstrap();
+      if (provider.deliveryPerson == null && appState.user != null) {
+        provider.hydrateFromSession(
+          token: provider.authToken ?? appState.token ?? '',
+          user: appState.user!,
+        );
+      }
       await provider.refreshProfile();
+      await provider.syncInitialPaymentStatus();
       await provider.loadStatusDetails();
     });
   }
@@ -130,9 +144,10 @@ class _DeliveryProfileScreenState extends State<DeliveryProfileScreen> {
 
                   const SizedBox(height: 20),
 
-                  // ── Shift status card ──────────────────────────────────
+                  // ── Work status card ───────────────────────────────────
                   _ShiftStatusCard(
                     online: provider.online,
+                    isPaymentRequired: provider.isInitialPaymentRequired,
                     activeSince: activeSince,
                   ),
 
@@ -486,11 +501,16 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-// ─── Shift Status Card ────────────────────────────────────────────────────────
+// ─── Work / Shift Status Card ─────────────────────────────────────────────────
 
 class _ShiftStatusCard extends StatelessWidget {
-  const _ShiftStatusCard({required this.online, required this.activeSince});
+  const _ShiftStatusCard({
+    required this.online,
+    this.isPaymentRequired = false,
+    required this.activeSince,
+  });
   final bool online;
+  final bool isPaymentRequired;
   final String activeSince;
 
   @override
@@ -515,7 +535,7 @@ class _ShiftStatusCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Shift Status',
+                  'Work Status',
                   style: TextStyle(
                     fontSize: 12,
                     color: _kTextMid,
@@ -524,7 +544,7 @@ class _ShiftStatusCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  online ? 'Online' : 'Offline',
+                  online ? 'Active' : 'Inactive',
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
@@ -538,19 +558,33 @@ class _ShiftStatusCard extends StatelessWidget {
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: online ? const Color(0xFF22C55E) : Colors.grey,
+                        color: online
+                            ? const Color(0xFF22C55E)
+                            : (isPaymentRequired
+                                  ? const Color(0xFFDC2626)
+                                  : Colors.grey),
                         shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      online
-                          ? 'Active since $activeSince'
-                          : 'Currently offline',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: online ? _kOrange : _kTextMid,
+                    Flexible(
+                      child: Text(
+                        online
+                            ? 'Active since $activeSince'
+                            : (isPaymentRequired
+                                  ? 'Payment required to work'
+                                  : 'Currently off duty'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: online
+                              ? const Color(0xFF22C55E)
+                              : (isPaymentRequired
+                                    ? const Color(0xFFDC2626)
+                                    : _kTextMid),
+                        ),
                       ),
                     ),
                   ],
@@ -563,12 +597,12 @@ class _ShiftStatusCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: _kOrangeLight,
+              color: online ? const Color(0xFFECFDF5) : _kOrangeLight,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.wifi_tethering_rounded,
-              color: _kOrange,
+              color: online ? const Color(0xFF22C55E) : _kOrange,
               size: 24,
             ),
           ),
@@ -719,13 +753,18 @@ class _StatItem extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: large ? 24 : 22,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-              letterSpacing: -0.5,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: large ? 24 : 22,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: -0.5,
+              ),
             ),
           ),
         ],
@@ -742,8 +781,22 @@ class _AccountSettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.read<DeliveryProvider>();
+    final provider = context.watch<DeliveryProvider>();
+    final isPaid = provider.isInitialPaymentPaid;
+    final amount = provider.initialPaymentAmount;
+    final displayAmount = amount > 0 ? amount.toStringAsFixed(0) : '500';
+
     final items = [
+      _SettingItem(
+        icon: Icons.payments_rounded,
+        label: 'Partner Onboarding Fee',
+        subtitle: isPaid
+            ? 'Verified & Paid (₹$displayAmount)'
+            : 'Payment Required • ₹$displayAmount',
+        onTap: () => Navigator.of(
+          context,
+        ).pushNamed(DeliveryInitialPaymentScreen.routeName),
+      ),
       _SettingItem(
         icon: Icons.phone_rounded,
         label: 'Phone Number',
@@ -989,75 +1042,6 @@ void _showInfoSheet(
   );
 }
 
-void _showEarningsSheet(BuildContext context) {
-  final provider = context.read<DeliveryProvider>();
-  final stats = provider.earningsStats;
-  final total = (stats['total'] as num?)?.toDouble() ?? 0;
-  final today = (stats['today'] as num?)?.toDouble() ?? 0;
-  final weekly = (stats['weekly'] as num?)?.toDouble() ?? 0;
-  final monthly = (stats['monthly'] as num?)?.toDouble() ?? 0;
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    builder: (sheetContext) {
-      return Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Earnings Detail',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 12),
-            _earningsRow('Today', today),
-            _earningsRow('Weekly', weekly),
-            _earningsRow('Monthly', monthly),
-            _earningsRow('Total', total),
-            const SizedBox(height: 16),
-          ],
-        ),
-      );
-    },
-  );
-}
-
-Widget _earningsRow(String label, double value) {
-  return Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
-        Text(
-          '₹${value.toStringAsFixed(2)}',
-          style: const TextStyle(fontWeight: FontWeight.w900, color: _kOrange),
-        ),
-      ],
-    ),
-  );
-}
-
 class _SettingItem {
   const _SettingItem({
     required this.icon,
@@ -1142,6 +1126,8 @@ class _SettingRowState extends State<_SettingRow>
                         const SizedBox(height: 2),
                         Text(
                           widget.item.subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,
                             color: _kTextMid,
@@ -1283,83 +1269,6 @@ class _Footer extends StatelessWidget {
 }
 
 // ─── Bottom Nav ───────────────────────────────────────────────────────────────
-
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.index, required this.onTap});
-  final int index;
-  final ValueChanged<int> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const items = [
-      (Icons.grid_view_rounded, 'Home'),
-      (Icons.history_rounded, 'History'),
-      (Icons.account_balance_wallet_rounded, 'Earnings'),
-      (Icons.person_rounded, 'Profile'),
-    ];
-
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.only(bottom: bottomInset),
-        child: Container(
-          height: 76,
-          decoration: BoxDecoration(
-            color: _kCard,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 20,
-                offset: const Offset(0, -4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: items.asMap().entries.map((e) {
-              final i = e.key;
-              final item = e.value;
-              final selected = i == index;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => onTap(i),
-                  behavior: HitTestBehavior.opaque,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: selected ? _kOrange : Colors.transparent,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          item.$1,
-                          size: 22,
-                          color: selected ? Colors.white : _kTextMid,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        item.$2,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: selected ? _kOrange : _kTextMid,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ─── Avatar Fallback ──────────────────────────────────────────────────────────
 

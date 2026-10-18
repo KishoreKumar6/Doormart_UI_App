@@ -4,9 +4,6 @@ import 'package:provider/provider.dart';
 import '../models/delivery_order_model.dart';
 import '../providers/delivery_provider.dart';
 import '../widgets/delivery_sidebar_drawer.dart';
-import 'delivery_home_screen.dart';
-import 'delivery_earnings_screen.dart';
-import 'delivery_profile_screen.dart';
 
 class DeliveryHistoryScreen extends StatefulWidget {
   const DeliveryHistoryScreen({super.key});
@@ -42,8 +39,11 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
     final history = provider.history;
     final backendStats = provider.earningsStats;
     final filtered = _applyFilters(history, _query, _filter);
-    final completedOrders = backendStats['completedOrders'] as num? ?? history.length;
-    final totalEarnings = (backendStats['total'] as num?)?.toDouble() ?? _selectedEarnings(backendStats, _filter);
+    final completedOrders =
+        backendStats['completedOrders'] as num? ?? history.length;
+    final totalEarnings =
+        (backendStats['total'] as num?)?.toDouble() ??
+        _selectedEarnings(backendStats, _filter);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
@@ -62,7 +62,10 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
         ),
         title: const Text(
           'Delivery History',
-          style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A)),
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF1A1A1A),
+          ),
         ),
         iconTheme: const IconThemeData(color: Color(0xFFE8541A)),
       ),
@@ -118,14 +121,19 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
             if (provider.loading && history.isEmpty)
               const _HistorySkeleton()
             else if (filtered.isEmpty)
-              const _EmptyHistoryCard(message: 'No orders match your search or filter')
+              const _EmptyHistoryCard(
+                message: 'No orders match your search or filter',
+              )
             else
               ..._groupedOrders(filtered).entries.expand((entry) {
                 final sectionOrders = entry.value;
                 return [
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: _SectionHeader(title: entry.key, count: sectionOrders.length),
+                    child: _SectionHeader(
+                      title: entry.key,
+                      count: sectionOrders.length,
+                    ),
                   ),
                   ...sectionOrders.map(
                     (order) => Padding(
@@ -145,31 +153,6 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
               ),
             ],
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MonthSelector extends StatelessWidget {
-  const _MonthSelector({required this.value, required this.onTap});
-  final String value;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: const Icon(Icons.calendar_month_rounded, size: 18),
-        label: Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF1A1A1A),
-          side: const BorderSide(color: Color(0xFFE7D7CF)),
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         ),
       ),
     );
@@ -199,7 +182,9 @@ class _HistoryStatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: muted ? Colors.white : accent,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: muted ? const Color(0xFFE7D7CF) : Colors.transparent),
+        border: Border.all(
+          color: muted ? const Color(0xFFE7D7CF) : Colors.transparent,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -213,15 +198,24 @@ class _HistoryStatCard extends StatelessWidget {
           Positioned(
             right: 0,
             bottom: 0,
-            child: Icon(icon, size: 74, color: Colors.white.withValues(alpha: muted ? 0.7 : 0.18)),
+            child: Icon(
+              icon,
+              size: 74,
+              color: Colors.white.withValues(alpha: muted ? 0.7 : 0.18),
+            ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
-                  color: muted ? const Color(0xFFFFF0EB) : Colors.white.withValues(alpha: 0.18),
+                  color: muted
+                      ? const Color(0xFFFFF0EB)
+                      : Colors.white.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -266,7 +260,10 @@ class _SearchField extends StatelessWidget {
         prefixIcon: const Icon(Icons.search_rounded, size: 20),
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Color(0xFFE7D7CF)),
@@ -306,7 +303,9 @@ class _FilterChipBar extends StatelessWidget {
             fontWeight: FontWeight.w800,
             color: active ? Colors.white : const Color(0xFF1A1A1A),
           ),
-          side: BorderSide(color: active ? const Color(0xFFE8541A) : const Color(0xFFE7D7CF)),
+          side: BorderSide(
+            color: active ? const Color(0xFFE8541A) : const Color(0xFFE7D7CF),
+          ),
         );
       }).toList(),
     );
@@ -386,7 +385,10 @@ class _HistoryOrderCard extends StatelessWidget {
                   width: 56,
                   height: 56,
                   color: const Color(0xFFFFF0EB),
-                  child: const Icon(Icons.local_shipping_rounded, color: Color(0xFFE8541A)),
+                  child: const Icon(
+                    Icons.local_shipping_rounded,
+                    color: Color(0xFFE8541A),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -431,7 +433,10 @@ class _HistoryOrderCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       '${_formatDate(_historyDate(order))} • ${order.customerArea}',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF777777)),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF777777),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -453,7 +458,8 @@ class _HistoryOrderCard extends StatelessWidget {
                         ),
                         _MiniInfoChip(
                           icon: Icons.account_balance_wallet_rounded,
-                          label: 'Earned ₹${(order.deliveryEarning ?? 0).toStringAsFixed(2)}',
+                          label:
+                              'Earned ₹${(order.deliveryEarning ?? 0).toStringAsFixed(2)}',
                         ),
                       ],
                     ),
@@ -501,12 +507,20 @@ void _showOrderDetails(BuildContext context, DeliveryOrderModel order) {
                 const SizedBox(height: 16),
                 Text(
                   order.displayOrderId,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A)),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1A1A1A),
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   order.customerName,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF555555)),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF555555),
+                  ),
                 ),
                 if (order.vendorStoreName?.trim().isNotEmpty == true) ...[
                   const SizedBox(height: 6),
@@ -546,20 +560,24 @@ void _showOrderDetails(BuildContext context, DeliveryOrderModel order) {
                       value: order.vendorPincode!.trim(),
                     ),
                   ],
-                  if (order.vendorAddress?.trim().isNotEmpty == true) const SizedBox(height: 12),
+                  if (order.vendorAddress?.trim().isNotEmpty == true)
+                    const SizedBox(height: 12),
                   if (order.vendorPhone?.trim().isNotEmpty == true)
                     _DetailTile(
                       icon: Icons.call_rounded,
                       title: 'Vendor Phone',
                       value: order.vendorPhone!.trim(),
                     ),
-                  if (order.vendorPhone?.trim().isNotEmpty == true) const SizedBox(height: 16),
+                  if (order.vendorPhone?.trim().isNotEmpty == true)
+                    const SizedBox(height: 16),
                 ],
                 const SizedBox(height: 16),
                 _DetailTile(
                   icon: Icons.location_on_rounded,
                   title: 'Delivered Address',
-                  value: order.customerAddress.isNotEmpty ? order.customerAddress : order.customerArea,
+                  value: order.customerAddress.isNotEmpty
+                      ? order.customerAddress
+                      : order.customerArea,
                 ),
                 if (order.customerLine1?.trim().isNotEmpty == true) ...[
                   const SizedBox(height: 12),
@@ -600,7 +618,11 @@ void _showOrderDetails(BuildContext context, DeliveryOrderModel order) {
                 const SizedBox(height: 16),
                 const Text(
                   'Items',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A)),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1A1A1A),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 ...order.items.map(
@@ -627,7 +649,11 @@ void _showOrderDetails(BuildContext context, DeliveryOrderModel order) {
 }
 
 class _DetailTile extends StatelessWidget {
-  const _DetailTile({required this.icon, required this.title, required this.value});
+  const _DetailTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
 
   final IconData icon;
   final String title;
@@ -658,9 +684,23 @@ class _DetailTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF777777))),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF777777),
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
               ],
             ),
           ),
@@ -702,16 +742,31 @@ class _OrderItemTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                Text(
+                  item.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text('Qty: ${item.quantity}  •  ₹${item.unitPrice.toStringAsFixed(2)} each',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF666666))),
+                Text(
+                  'Qty: ${item.quantity}  •  ₹${item.unitPrice.toStringAsFixed(2)} each',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF666666),
+                  ),
+                ),
               ],
             ),
           ),
           Text(
             '₹${item.lineTotal.toStringAsFixed(2)}',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFFE8541A)),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFFE8541A),
+            ),
           ),
         ],
       ),
@@ -738,9 +793,13 @@ class _MiniInfoChip extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: const Color(0xFFE8541A)),
           const SizedBox(width: 5),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
@@ -852,7 +911,10 @@ class _SummaryFooter extends StatelessWidget {
           ),
           Text(
             'Delivered $completedOrders',
-            style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFE8541A)),
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Color(0xFFE8541A),
+            ),
           ),
           const SizedBox(width: 12),
           Text(
@@ -865,96 +927,17 @@ class _SummaryFooter extends StatelessWidget {
   }
 }
 
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.index, required this.onTap});
 
-  final int index;
-  final ValueChanged<int> onTap;
 
-  @override
-  Widget build(BuildContext context) {
-    const items = [
-      (Icons.grid_view_rounded, 'Home'),
-      (Icons.history_rounded, 'History'),
-      (Icons.account_balance_wallet_rounded, 'Earnings'),
-      (Icons.person_rounded, 'Profile'),
-    ];
-
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.only(bottom: bottomInset),
-        child: Container(
-          height: 76,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 20,
-                offset: const Offset(0, -4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: items.asMap().entries.map((e) {
-              final i = e.key;
-              final item = e.value;
-              final selected = i == index;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => onTap(i),
-                  behavior: HitTestBehavior.opaque,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: selected ? const Color(0xFFE8541A) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          item.$1,
-                          size: 22,
-                          color: selected ? Colors.white : const Color(0xFF888888),
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        item.$2,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: selected ? const Color(0xFFE8541A) : const Color(0xFF888888),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-int _countToday(List<DeliveryOrderModel> orders) {
-  final now = DateTime.now();
-  return orders.where((order) {
-    final created = _historyDate(order);
-    return created.year == now.year && created.month == now.month && created.day == now.day;
-  }).length;
-}
-
-List<DeliveryOrderModel> _applyFilters(List<DeliveryOrderModel> orders, String query, _HistoryFilter filter) {
+List<DeliveryOrderModel> _applyFilters(
+  List<DeliveryOrderModel> orders,
+  String query,
+  _HistoryFilter filter,
+) {
   final needle = query.trim().toLowerCase();
   return orders.where((order) {
-    final matchesSearch = needle.isEmpty ||
+    final matchesSearch =
+        needle.isEmpty ||
         [
           order.displayOrderId,
           order.customerName,
@@ -964,15 +947,26 @@ List<DeliveryOrderModel> _applyFilters(List<DeliveryOrderModel> orders, String q
     final matchesFilter = switch (filter) {
       _HistoryFilter.all => true,
       _HistoryFilter.today => _isSameDay(_historyDate(order), DateTime.now()),
-      _HistoryFilter.yesterday => _isSameDay(_historyDate(order), DateTime.now().subtract(const Duration(days: 1))),
-      _HistoryFilter.thisWeek => _isSameWeek(_historyDate(order), DateTime.now()),
-      _HistoryFilter.thisMonth => _isSameMonth(_historyDate(order), DateTime.now()),
+      _HistoryFilter.yesterday => _isSameDay(
+        _historyDate(order),
+        DateTime.now().subtract(const Duration(days: 1)),
+      ),
+      _HistoryFilter.thisWeek => _isSameWeek(
+        _historyDate(order),
+        DateTime.now(),
+      ),
+      _HistoryFilter.thisMonth => _isSameMonth(
+        _historyDate(order),
+        DateTime.now(),
+      ),
     };
     return matchesSearch && matchesFilter;
   }).toList();
 }
 
-Map<String, List<DeliveryOrderModel>> _groupedOrders(List<DeliveryOrderModel> orders) {
+Map<String, List<DeliveryOrderModel>> _groupedOrders(
+  List<DeliveryOrderModel> orders,
+) {
   final today = <DeliveryOrderModel>[];
   final yesterday = <DeliveryOrderModel>[];
   final thisWeek = <DeliveryOrderModel>[];
@@ -982,7 +976,10 @@ Map<String, List<DeliveryOrderModel>> _groupedOrders(List<DeliveryOrderModel> or
     final historyDate = _historyDate(order);
     if (_isSameDay(historyDate, DateTime.now())) {
       today.add(order);
-    } else if (_isSameDay(historyDate, DateTime.now().subtract(const Duration(days: 1)))) {
+    } else if (_isSameDay(
+      historyDate,
+      DateTime.now().subtract(const Duration(days: 1)),
+    )) {
       yesterday.add(order);
     } else if (_isSameWeek(historyDate, DateTime.now())) {
       thisWeek.add(order);
@@ -1001,11 +998,13 @@ Map<String, List<DeliveryOrderModel>> _groupedOrders(List<DeliveryOrderModel> or
 
 double _selectedEarnings(Map<String, dynamic> stats, _HistoryFilter filter) {
   final value = switch (filter) {
-    _HistoryFilter.all => stats['monthly'] ?? stats['monthlyEarnings'] ?? stats['today'] ?? 0,
+    _HistoryFilter.all =>
+      stats['monthly'] ?? stats['monthlyEarnings'] ?? stats['today'] ?? 0,
     _HistoryFilter.today => stats['today'] ?? stats['todayEarnings'] ?? 0,
     _HistoryFilter.yesterday => stats['today'] ?? stats['todayEarnings'] ?? 0,
     _HistoryFilter.thisWeek => stats['weekly'] ?? stats['weeklyEarnings'] ?? 0,
-    _HistoryFilter.thisMonth => stats['monthly'] ?? stats['monthlyEarnings'] ?? 0,
+    _HistoryFilter.thisMonth =>
+      stats['monthly'] ?? stats['monthlyEarnings'] ?? 0,
   };
   return (value as num?)?.toDouble() ?? 0;
 }
@@ -1023,47 +1022,25 @@ bool _isSameWeek(DateTime a, DateTime b) {
   final bDate = DateTime(b.year, b.month, b.day);
   final mondayA = aDate.subtract(Duration(days: aDate.weekday - 1));
   final mondayB = bDate.subtract(Duration(days: bDate.weekday - 1));
-  return mondayA.year == mondayB.year && mondayA.month == mondayB.month && mondayA.day == mondayB.day;
+  return mondayA.year == mondayB.year &&
+      mondayA.month == mondayB.month &&
+      mondayA.day == mondayB.day;
 }
 
 enum _HistoryFilter { all, today, yesterday, thisWeek, thisMonth }
 
 extension on _HistoryFilter {
   String get label => switch (this) {
-        _HistoryFilter.all => 'All',
-        _HistoryFilter.today => 'Today',
-        _HistoryFilter.yesterday => 'Yesterday',
-        _HistoryFilter.thisWeek => 'This Week',
-        _HistoryFilter.thisMonth => 'This Month',
-      };
-}
-int _countYesterday(List<DeliveryOrderModel> orders) {
-  final yesterday = DateTime.now().subtract(const Duration(days: 1));
-  return orders.where((order) {
-    final created = _historyDate(order);
-    return created.year == yesterday.year &&
-        created.month == yesterday.month &&
-        created.day == yesterday.day;
-  }).length;
+    _HistoryFilter.all => 'All',
+    _HistoryFilter.today => 'Today',
+    _HistoryFilter.yesterday => 'Yesterday',
+    _HistoryFilter.thisWeek => 'This Week',
+    _HistoryFilter.thisMonth => 'This Month',
+  };
 }
 
-List<DeliveryOrderModel> _todayOrders(List<DeliveryOrderModel> orders) {
-  final now = DateTime.now();
-  return orders.where((order) {
-    final created = _historyDate(order);
-    return created.year == now.year && created.month == now.month && created.day == now.day;
-  }).toList();
-}
 
-List<DeliveryOrderModel> _yesterdayOrders(List<DeliveryOrderModel> orders) {
-  final yesterday = DateTime.now().subtract(const Duration(days: 1));
-  return orders.where((order) {
-    final created = _historyDate(order);
-    return created.year == yesterday.year &&
-        created.month == yesterday.month &&
-        created.day == yesterday.day;
-  }).toList();
-}
+
 
 DateTime _historyDate(DeliveryOrderModel order) {
   return order.deliveredAt ?? order.createdAt;

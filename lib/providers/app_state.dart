@@ -237,7 +237,10 @@ class AppState extends ChangeNotifier {
   }
 
   bool _isNightShiftNow() {
-    final currentMinutes = DateTime.now().hour * 60 + DateTime.now().minute;
+    final istNow = DateTime.now().toUtc().add(
+      const Duration(hours: 5, minutes: 30),
+    );
+    final currentMinutes = istNow.hour * 60 + istNow.minute;
     final start = _parseTimeToMinutes(dayShiftStart, 22 * 60);
     final end = _parseTimeToMinutes(dayShiftEnd, 6 * 60);
     return start < end
@@ -282,14 +285,7 @@ class AppState extends ChangeNotifier {
         (checkoutSummary?['deliveryFee'] as num?)?.toDouble();
     if (summaryFee != null && summaryFee > 0) return summaryFee;
     if (shiftChargesEnabled) {
-      final now = DateTime.now();
-      final currentMinutes = now.hour * 60 + now.minute;
-      final start = _parseTimeToMinutes(dayShiftStart, 22 * 60);
-      final end = _parseTimeToMinutes(dayShiftEnd, 6 * 60);
-      final isNight = start < end
-          ? (currentMinutes >= start && currentMinutes < end)
-          : (currentMinutes >= start || currentMinutes < end);
-      return isNight
+      return _isNightShiftNow()
           ? deliveryChargeAmount + nightDeliveryCharge
           : deliveryChargeAmount;
     }
@@ -342,6 +338,7 @@ class AppState extends ChangeNotifier {
     }
     return product;
   }
+
   bool get signedIn => token != null;
   String get logoutRouteName {
     switch (user?.role) {
@@ -1356,7 +1353,8 @@ class AppState extends ChangeNotifier {
     }
     if (routeName == '/delivery/login' ||
         routeName == '/delivery/register' ||
-        routeName == '/delivery/status') {
+        routeName == '/delivery/status' ||
+        routeName == '/delivery/payment') {
       return true;
     }
     return RoleAccess.canAccessRoute(user?.role, routeName);
@@ -2026,13 +2024,10 @@ class AppState extends ChangeNotifier {
       freeDeliveryEnabled = _asBool(data['freeDeliveryEnabled']);
     }
     final feeFromData = (data['deliveryFee'] as num?)?.toDouble();
-    final shiftChargeFromData = (data['shiftCharge'] as num?)?.toDouble();
-    final effectiveRawFee =
-        (shiftChargeFromData != null && shiftChargeFromData > 0)
-        ? shiftChargeFromData
-        : (feeFromData != null && feeFromData > 0)
-        ? feeFromData
-        : calculatedDeliveryFee;
+    // shiftCharge is only the optional surcharge. The backend deliveryFee is
+    // the authoritative final fee and already includes distance and night
+    // pricing when applicable.
+    final effectiveRawFee = feeFromData ?? calculatedDeliveryFee;
     final qualifiesFree =
         isFreeDelivery ||
         data['isFreeDelivery'] == true ||
@@ -2534,6 +2529,67 @@ class AppState extends ChangeNotifier {
             )
             as List<dynamic>;
     return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> updateDeliveryPaymentStatus({
+    required String deliveryPersonId,
+    required String status,
+    num? amount,
+    String? reference,
+    String? notes,
+  }) async {
+    if (token == null ||
+        (user?.role != UserRoles.admin && user?.role != UserRoles.superAdmin)) {
+      throw StateError('Admin login required');
+    }
+    final safeId = Uri.encodeComponent(deliveryPersonId.trim());
+    final payload = <String, dynamic>{
+      'status': status,
+      if (amount != null) 'amount': amount,
+      if (reference != null && reference.trim().isNotEmpty)
+        'reference': reference.trim(),
+      if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+    };
+    final data = await apiService.patch(
+      '/admin/delivery/$safeId/payment-status',
+      body: payload,
+      token: token,
+    );
+    notifyListeners();
+    return data is Map<String, dynamic> ? data : <String, dynamic>{};
+  }
+
+  Future<num> getDeliveryInitialPaymentSetting() async {
+    if (token == null) return 500;
+    try {
+      final res = await apiService.get(
+        '/admin/settings/delivery-initial-payment',
+        token: token,
+      );
+      if (res is Map<String, dynamic>) {
+        final amount = res['amount'] ?? res['value'];
+        if (amount is num) return amount;
+      }
+      return 500;
+    } catch (e) {
+      debugPrint('[AppState] Failed to get initial payment setting: $e');
+      return 500;
+    }
+  }
+
+  Future<Map<String, dynamic>> updateDeliveryInitialPaymentSetting(
+    num amount,
+  ) async {
+    if (token == null || user?.role != UserRoles.superAdmin) {
+      throw StateError('Super Admin login required');
+    }
+    final res = await apiService.patch(
+      '/admin/settings/delivery-initial-payment',
+      body: {'amount': amount},
+      token: token,
+    );
+    notifyListeners();
+    return res is Map<String, dynamic> ? res : <String, dynamic>{};
   }
 
   Future<UserModel> updateAdminUserRole(String userId, String role) async {

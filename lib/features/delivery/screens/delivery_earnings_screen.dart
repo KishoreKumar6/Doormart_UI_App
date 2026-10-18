@@ -3,9 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../providers/delivery_provider.dart';
 import '../widgets/delivery_sidebar_drawer.dart';
-import 'delivery_home_screen.dart';
-import 'delivery_history_screen.dart';
-import 'delivery_profile_screen.dart';
 
 class DeliveryEarningsScreen extends StatefulWidget {
   const DeliveryEarningsScreen({super.key});
@@ -55,7 +52,10 @@ class _DeliveryEarningsScreenState extends State<DeliveryEarningsScreen> {
         ),
         title: const Text(
           'Earnings',
-          style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A)),
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF1A1A1A),
+          ),
         ),
         iconTheme: const IconThemeData(color: Color(0xFFE8541A)),
       ),
@@ -73,17 +73,29 @@ class _DeliveryEarningsScreenState extends State<DeliveryEarningsScreen> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _MetricCard(label: 'Today', value: today)),
+                Expanded(
+                  child: _MetricCard(label: 'Today', value: today),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: _MetricCard(label: 'Weekly', value: weekly)),
+                Expanded(
+                  child: _MetricCard(label: 'Weekly', value: weekly),
+                ),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _MetricCard(label: 'Monthly', value: monthly)),
+                Expanded(
+                  child: _MetricCard(label: 'Monthly', value: monthly),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: _MetricCard(label: 'Completed', value: completed.toDouble(), isCount: true)),
+                Expanded(
+                  child: _MetricCard(
+                    label: 'Completed',
+                    value: completed.toDouble(),
+                    isCount: true,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -139,21 +151,33 @@ class _HeroCard extends StatelessWidget {
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          Text(
-            '₹${total.toStringAsFixed(2)}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '₹${total.toStringAsFixed(2)}',
+              maxLines: 1,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 32,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+              ),
             ),
           ),
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _MiniStat(label: 'Completed', value: '$completed')),
+              Expanded(
+                child: _MiniStat(label: 'Completed', value: '$completed'),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: _MiniStat(label: 'Pending payout', value: '₹${pendingPayout.toStringAsFixed(2)}')),
+              Expanded(
+                child: _MiniStat(
+                  label: 'Pending payout',
+                  value: '₹${pendingPayout.toStringAsFixed(2)}',
+                ),
+              ),
             ],
           ),
         ],
@@ -179,9 +203,27 @@ class _MiniStat extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 11)),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.85),
+              fontSize: 11,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -212,11 +254,29 @@ class _MetricCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w700, fontSize: 12)),
-          const Spacer(),
           Text(
-            isCount ? value.toInt().toString() : '₹${value.toStringAsFixed(2)}',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A)),
+            label,
+            style: const TextStyle(
+              color: Color(0xFF6B7280),
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+          const Spacer(),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              isCount
+                  ? value.toInt().toString()
+                  : '₹${value.toStringAsFixed(2)}',
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
           ),
         ],
       ),
@@ -253,7 +313,11 @@ class _BreakdownCard extends StatelessWidget {
         children: [
           const Text(
             'Earnings Breakdown',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A)),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF1A1A1A),
+            ),
           ),
           const SizedBox(height: 14),
           _row('Today', today),
@@ -268,98 +332,35 @@ class _BreakdownCard extends StatelessWidget {
 
   Widget _row(String label, double value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
+            flex: 5,
             child: Text(
               label,
-              style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF374151)),
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF374151),
+                fontSize: 13,
+              ),
             ),
           ),
-          Text(
-            '₹${value.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFFE8541A)),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 5,
+            child: Text(
+              '₹${value.toStringAsFixed(2)}',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                color: Color(0xFFE8541A),
+                fontSize: 13,
+              ),
+            ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.index, required this.onTap});
-
-  final int index;
-  final ValueChanged<int> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const items = [
-      (Icons.grid_view_rounded, 'Home'),
-      (Icons.history_rounded, 'History'),
-      (Icons.account_balance_wallet_rounded, 'Earnings'),
-      (Icons.person_rounded, 'Profile'),
-    ];
-
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.only(bottom: bottomInset),
-        child: Container(
-          height: 76,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 20,
-                offset: const Offset(0, -4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: items.asMap().entries.map((e) {
-              final i = e.key;
-              final item = e.value;
-              final selected = i == index;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => onTap(i),
-                  behavior: HitTestBehavior.opaque,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: selected ? const Color(0xFFE8541A) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          item.$1,
-                          size: 22,
-                          color: selected ? Colors.white : const Color(0xFF888888),
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        item.$2,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: selected ? const Color(0xFFE8541A) : const Color(0xFF888888),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
       ),
     );
   }

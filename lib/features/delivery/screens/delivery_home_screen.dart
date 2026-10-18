@@ -4,12 +4,14 @@ import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/app_state.dart';
-import '../../../models/user_model.dart';
+import '../../../services/api_service.dart';
 import '../providers/delivery_provider.dart';
 import 'active_order_screen.dart';
 import 'delivery_history_screen.dart';
 import 'delivery_earnings_screen.dart';
 import 'delivery_profile_screen.dart';
+import 'delivery_initial_payment_screen.dart';
+import '../models/delivery_order_model.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const _kOrange = Color(0xFFE8541A);
@@ -31,14 +33,19 @@ class DeliveryHomeScreen extends StatefulWidget {
 class _DeliveryHomeScreenState extends State<DeliveryHomeScreen>
     with WidgetsBindingObserver {
   _MetricRange _range = _MetricRange.today;
-  bool _locationEnabled = true;
+  bool _locationServiceEnabled = true;
+  LocationPermission _locationPermission = LocationPermission.always;
+  bool _locationReady = true;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // Recheck automatically when the user returns from device settings.
       _refreshLocationStatus();
     }
   }
+
+  bool _isCheckingPayment = false;
 
   @override
   void initState() {
@@ -46,19 +53,86 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen>
     WidgetsBinding.instance.addObserver(this);
     _refreshLocationStatus();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final appState = context.read<AppState>();
       final provider = context.read<DeliveryProvider>();
+      if ((provider.authToken == null || provider.authToken!.isEmpty) &&
+          appState.token != null &&
+          appState.token!.isNotEmpty) {
+        provider.authToken = appState.token;
+      }
+      if (provider.authUser == null && appState.user != null) {
+        provider.authUser = appState.user!.toJson();
+      }
       await provider.bootstrap();
-      if (provider.deliveryPerson == null &&
-          provider.authToken != null &&
-          provider.authUser != null) {
+      if (provider.deliveryPerson == null && appState.user != null) {
         provider.hydrateFromSession(
-          token: provider.authToken!,
-          user: UserModel.fromJson(provider.authUser!),
+          token: provider.authToken ?? appState.token ?? '',
+          user: appState.user!,
         );
       }
       await provider.syncOnlineState();
+      await provider.syncInitialPaymentStatus();
       await provider.loadDashboard();
     });
+  }
+
+  void _showInitialPaymentRequiredDialog(BuildContext context, double amount) {
+    final displayAmount = amount > 0 ? amount.toStringAsFixed(0) : '500';
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        icon: Container(
+          width: 56,
+          height: 56,
+          decoration: const BoxDecoration(
+            color: _kOrangeLight,
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.payments_rounded, color: _kOrange, size: 30),
+        ),
+        title: const Text(
+          'Initial Payment Required',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            color: _kTextDark,
+            fontSize: 18,
+          ),
+        ),
+        content: Text(
+          'A one-time partner onboarding payment of ₹$displayAmount is required before you can go online and receive customer delivery orders.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: _kTextMid, fontSize: 14, height: 1.45),
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Later', style: TextStyle(color: _kTextMid)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: _kOrange,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              Navigator.of(
+                context,
+              ).pushNamed(DeliveryInitialPaymentScreen.routeName);
+            },
+            child: Text(
+              'Pay ₹$displayAmount Now',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -68,13 +142,53 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen>
   }
 
   Future<void> _refreshLocationStatus() async {
-    final enabled = await Geolocator.isLocationServiceEnabled();
-    if (mounted) setState(() => _locationEnabled = enabled);
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    var permission = await Geolocator.checkPermission();
+    if (!mounted) return;
+    setState(() {
+      _locationServiceEnabled = serviceEnabled;
+      _locationPermission = permission;
+      _locationReady =
+          serviceEnabled &&
+          (permission == LocationPermission.always ||
+              permission == LocationPermission.whileInUse);
+    });
   }
 
   Future<void> _openLocationSettings() async {
-    await Geolocator.openLocationSettings();
+    if (!_locationServiceEnabled) {
+      await Geolocator.openLocationSettings();
+    } else {
+      await Geolocator.openAppSettings();
+    }
     await _refreshLocationStatus();
+  }
+
+  /// Blocks going online until location services AND permission are available.
+  Future<bool> _ensureLocationReady() async {
+    await _refreshLocationStatus();
+    if (!mounted) return _locationReady;
+    if (_locationReady) return true;
+    if (!_locationServiceEnabled) {
+      await _openLocationSettings();
+      return _locationReady;
+    }
+    var permission = _locationPermission;
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (mounted) {
+        setState(() {
+          _locationPermission = permission;
+          _locationReady =
+              permission == LocationPermission.always ||
+              permission == LocationPermission.whileInUse;
+        });
+      }
+    }
+    if (!_locationReady) {
+      await _openLocationSettings();
+    }
+    return _locationReady;
   }
 
   @override
@@ -83,9 +197,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen>
     final appState = context.watch<AppState>();
     final provider = context.watch<DeliveryProvider>();
     final person = provider.deliveryPerson;
-    final approvalStatus = (appState.user?.approvalStatus ?? 'approved')
-        .toLowerCase();
-    final canSeeRequests = person?.active ?? false;
+    final approvalStatus = (appState.user?.approvalStatus ?? 'approved');
     final stats = provider.earningsStats;
     final completed = _completedOrdersForRange(stats, _range);
     final earnings = _earningsForRange(stats, _range);
@@ -175,23 +287,120 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen>
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 100 + bottomInset),
         children: [
-          if (!_locationEnabled) ...[
-            _LocationDisabledBanner(onTurnOn: _openLocationSettings),
+          if (!_locationReady) ...[
+            _LocationDisabledBanner(
+              serviceDisabled: !_locationServiceEnabled,
+              onTurnOn: _openLocationSettings,
+            ),
             const SizedBox(height: 16),
           ],
           // ── Profile card ─────────────────────────────────────────────
+          // ── Initial Payment Section ─────────────────────────────────────
+          if (provider.isInitialPaymentRequired) ...[
+            _InitialPaymentRequiredCard(
+              amount: provider.initialPaymentAmount,
+              isChecking: _isCheckingPayment,
+              onPayTap: () {
+                Navigator.of(
+                  context,
+                ).pushNamed(DeliveryInitialPaymentScreen.routeName);
+              },
+              onVerifyTap: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                setState(() => _isCheckingPayment = true);
+                try {
+                  await provider.syncInitialPaymentStatus();
+                  if (!mounted) return;
+                  if (provider.isInitialPaymentPaid) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Payment verified successfully! You are eligible to work.',
+                        ),
+                      ),
+                    );
+                    await provider.loadDashboard();
+                  } else {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Payment not verified yet. If you completed payment, please try again in a few moments.',
+                        ),
+                      ),
+                    );
+                  }
+                } finally {
+                  if (mounted) setState(() => _isCheckingPayment = false);
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+          ] else ...[
+            _InitialPaymentPaidCard(
+              amount: provider.initialPaymentAmount,
+              completedAt: provider.initialPaymentCompletedAt,
+              onViewTap: () {
+                Navigator.of(
+                  context,
+                ).pushNamed(DeliveryInitialPaymentScreen.routeName);
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Work Status & Profile Card ────────────────────────────────
           _ProfileCard(
             name: person?.name ?? 'Delivery Partner',
             deliveryId: _shortId(person?.id),
             imageUrl: person?.avatarUrl ?? '',
             online: provider.online,
-            onToggle: (v) {
+            isPaymentRequired: provider.isInitialPaymentRequired,
+            onToggle: (v) async {
               HapticFeedback.lightImpact();
-              if (v && !_locationEnabled) {
-                _openLocationSettings();
+              final messenger = ScaffoldMessenger.of(context);
+              if (v && !await _ensureLocationReady()) {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Turn on location and allow location access to go online.',
+                    ),
+                  ),
+                );
                 return;
               }
-              v ? provider.goOnline() : provider.goOffline();
+              if (v && provider.isInitialPaymentRequired) {
+                if (!mounted) return;
+                _showInitialPaymentRequiredDialog(
+                  this.context,
+                  provider.initialPaymentAmount,
+                );
+                return;
+              }
+              try {
+                if (v) {
+                  await provider.goOnline();
+                } else {
+                  await provider.goOffline();
+                }
+              } on ApiException catch (e) {
+                if (!context.mounted) return;
+                if (e.code == 'INITIAL_PAYMENT_REQUIRED' ||
+                    e.statusCode == 403) {
+                  _showInitialPaymentRequiredDialog(
+                    context,
+                    provider.initialPaymentAmount,
+                  );
+                } else {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(e.message)));
+                }
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(e.toString())));
+              }
             },
           ),
 
@@ -237,96 +446,67 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen>
 
           const SizedBox(height: 24),
 
-          // ── New Requests ──────────────────────────────────────────────
-          if (canSeeRequests) ...[
-            Row(
+          const SizedBox(height: 15),
+
+          if (approvalStatus != 'approved')
+            const _EmptyState(
+              icon: Icons.hourglass_top_rounded,
+              message:
+                  'Your delivery partner account is pending admin approval',
+            )
+          else if (provider.isInitialPaymentRequired)
+            _EmptyState(
+              icon: Icons.payments_rounded,
+              message:
+                  'Complete your one-time onboarding payment to start working and receive delivery orders',
+            )
+          else if (!provider.online)
+            const _EmptyState(
+              icon: Icons.pause_circle_outline_rounded,
+              message:
+                  'You are currently Inactive. Turn on Work Status to start receiving requests.',
+            )
+          else if (provider.pendingRequests.isEmpty)
+            const _EmptyState(
+              icon: Icons.inbox_rounded,
+              message: 'No new requests right now',
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'New Requests',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: FontWeight.w900,
                     color: _kTextDark,
                   ),
                 ),
-                const SizedBox(width: 10),
-                if (provider.pendingRequests.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _kOrangeLight,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '${provider.pendingRequests.length} Nearby',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: _kOrange,
-                      ),
-                    ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 560,
+                  child: PageView.builder(
+                    controller: PageController(viewportFraction: 0.92),
+                    itemCount: provider.pendingRequests.length,
+                    itemBuilder: (context, i) {
+                      final order = provider.pendingRequests[i];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: _NewRequestCard(
+                          order: order,
+                          onAccept: () {
+                            HapticFeedback.mediumImpact();
+                            provider.acceptOrder(order);
+                          },
+                          onReject: () => provider.rejectOrder(order),
+                        ),
+                      );
+                    },
                   ),
-                const Spacer(),
-                // TextButton(
-                //   onPressed: () {},
-                //   style: TextButton.styleFrom(
-                //     foregroundColor: _kOrange,
-                //     padding: EdgeInsets.zero,
-                //     minimumSize: Size.zero,
-                //     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                //   ),
-                //   child: const Text(
-                //     'View All',
-                //     style: TextStyle(fontWeight: FontWeight.w700),
-                //   ),
-                // ),
+                ),
               ],
             ),
-
-            const SizedBox(height: 15),
-
-            if (provider.online && provider.pendingRequests.isEmpty)
-              _EmptyState(
-                icon: Icons.inbox_rounded,
-                message: 'No new requests right now',
-              )
-            else if (!provider.online)
-              const _EmptyState(
-                icon: Icons.wifi_off_rounded,
-                message: 'Go online to receive requests',
-              )
-            else
-              SizedBox(
-                height: 520,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: provider.pendingRequests.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
-                  itemBuilder: (context, i) {
-                    final order = provider.pendingRequests[i];
-                    return SizedBox(
-                      width: MediaQuery.of(context).size.width - 64,
-                      child: _NewRequestCard(
-                        order: order,
-                        onAccept: () {
-                          HapticFeedback.mediumImpact();
-                          provider.acceptOrder(order);
-                        },
-                        onReject: () => provider.rejectOrder(order),
-                      ),
-                    );
-                  },
-                ),
-              ),
-          ] else ...[
-            const _EmptyState(
-              icon: Icons.lock_outline_rounded,
-              message: 'Inactive delivery persons cannot receive requests',
-            ),
-          ],
 
           const SizedBox(height: 24),
 
@@ -367,12 +547,23 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen>
 // ─── Profile Card ─────────────────────────────────────────────────────────────
 
 class _LocationDisabledBanner extends StatelessWidget {
-  const _LocationDisabledBanner({required this.onTurnOn});
+  const _LocationDisabledBanner({
+    required this.onTurnOn,
+    this.serviceDisabled = true,
+  });
 
   final VoidCallback onTurnOn;
+  final bool serviceDisabled;
 
   @override
   Widget build(BuildContext context) {
+    final title = serviceDisabled
+        ? 'Location is turned off'
+        : 'Location permission is required';
+    final message = serviceDisabled
+        ? 'Turn on your phone location to receive orders and share live delivery tracking.'
+        : 'Allow location access in your app settings to receive orders and share live delivery tracking.';
+    final actionLabel = serviceDisabled ? 'Turn on' : 'Allow';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -383,28 +574,30 @@ class _LocationDisabledBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.location_off_rounded,
-            color: Color(0xFFEA580C),
+          Icon(
+            serviceDisabled
+                ? Icons.location_off_rounded
+                : Icons.location_searching_rounded,
+            color: const Color(0xFFEA580C),
             size: 24,
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Location is turned off',
-                  style: TextStyle(
+                  title,
+                  style: const TextStyle(
                     color: Color(0xFF9A3412),
                     fontSize: 15,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
-                  'Turn on your phone location to receive orders and share live delivery tracking.',
-                  style: TextStyle(
+                  message,
+                  style: const TextStyle(
                     color: Color(0xFF9A3412),
                     fontSize: 12,
                     height: 1.35,
@@ -421,9 +614,9 @@ class _LocationDisabledBanner extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               visualDensity: VisualDensity.compact,
             ),
-            child: const Text(
-              'Turn on',
-              style: TextStyle(fontWeight: FontWeight.w900),
+            child: Text(
+              actionLabel,
+              style: const TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
         ],
@@ -438,6 +631,7 @@ class _ProfileCard extends StatelessWidget {
     required this.deliveryId,
     required this.imageUrl,
     required this.online,
+    this.isPaymentRequired = false,
     required this.onToggle,
   });
 
@@ -445,6 +639,7 @@ class _ProfileCard extends StatelessWidget {
   final String deliveryId;
   final String imageUrl;
   final bool online;
+  final bool isPaymentRequired;
   final ValueChanged<bool> onToggle;
 
   @override
@@ -529,9 +724,9 @@ class _ProfileCard extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Duty status toggle
+          // Work status toggle
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: _kBg,
               borderRadius: BorderRadius.circular(14),
@@ -539,25 +734,68 @@ class _ProfileCard extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Duty Status',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: _kTextDark,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Work Status',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _kTextDark,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        online
+                            ? 'Active • Ready for orders'
+                            : (isPaymentRequired
+                                  ? 'Inactive • Payment required'
+                                  : 'Inactive • Off duty'),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: online
+                              ? _kGreen
+                              : (isPaymentRequired
+                                    ? const Color(0xFFDC2626)
+                                    : _kTextMid),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 200),
-                      child: Text(
-                        online ? 'ONLINE' : 'OFFLINE',
-                        key: ValueKey(online),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: online ? _kOrange : _kTextMid,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: online
+                              ? const Color(0xFFECFDF5)
+                              : (isPaymentRequired
+                                    ? const Color(0xFFFEE2E2)
+                                    : const Color(0xFFF3F4F6)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          online ? 'ACTIVE' : 'INACTIVE',
+                          key: ValueKey(online),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: online
+                                ? _kGreen
+                                : (isPaymentRequired
+                                      ? const Color(0xFFDC2626)
+                                      : _kTextMid),
+                          ),
                         ),
                       ),
                     ),
@@ -567,8 +805,8 @@ class _ProfileCard extends StatelessWidget {
                       child: Switch.adaptive(
                         value: online,
                         onChanged: onToggle,
-                        activeColor: _kOrange,
-                        activeTrackColor: _kOrange.withValues(alpha: 0.25),
+                        activeThumbColor: _kGreen,
+                        activeTrackColor: _kGreen.withValues(alpha: 0.25),
                       ),
                     ),
                   ],
@@ -664,13 +902,18 @@ class _MetricCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: largeValue ? 24 : 28,
-              fontWeight: FontWeight.w900,
-              color: _kOrange,
-              height: 1,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: largeValue ? 24 : 28,
+                fontWeight: FontWeight.w900,
+                color: _kOrange,
+                height: 1,
+              ),
             ),
           ),
           const SizedBox(height: 4),
@@ -824,7 +1067,7 @@ class _NewRequestCard extends StatefulWidget {
     required this.onReject,
   });
 
-  final dynamic order;
+  final DeliveryOrderModel order;
   final VoidCallback onAccept;
   final VoidCallback onReject;
 
@@ -835,164 +1078,288 @@ class _NewRequestCard extends StatefulWidget {
 class _NewRequestCardState extends State<_NewRequestCard> {
   @override
   Widget build(BuildContext context) {
+    final storeName = _text(
+      widget.order.vendorStoreName,
+      fallback: 'Store order',
+    );
+    final customerName = _text(widget.order.customerName, fallback: 'Customer');
     return Container(
-      padding: const EdgeInsets.all(20),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: _kCard,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFFFE1D6)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: const Color(0xFFFFD8C8)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.07),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
+            color: const Color(0xFFE8541A).withValues(alpha: 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Header: restaurant + timer ───────────────────────────────
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: _kOrangeLight,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.storefront_rounded,
-                  color: _kOrange,
-                  size: 26,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _text(widget.order.customerName, fallback: 'Customer'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: _kTextDark,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      _text(widget.order.customerPhone, fallback: '—'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: _kTextMid,
-                      ),
-                    ),
-                    Text(
-                      '${_requestItems(widget.order).length} items • ${_text(widget.order.customerArea, fallback: 'Unknown area')}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, color: _kTextMid),
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: () => _showItemsSheet(context),
-                style: TextButton.styleFrom(
-                  foregroundColor: _kOrange,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text(
-                  'View Items',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 18),
-
-          _detailLine('Placed', _formatDate(_orderCreatedAt(widget.order))),
-          _detailLine(
-            'Phone',
-            _text(widget.order.customerPhone, fallback: '—'),
-          ),
-          _detailLine(
-            'Address',
-            _text(widget.order.customerAddress, fallback: '—'),
-          ),
-          _detailLine(
-            'Order Amount',
-            '₹${_amount(widget.order).toStringAsFixed(2)}',
-          ),
-          _detailLine(
-            'Payment',
-            _text(widget.order.paymentType, fallback: 'Online'),
-          ),
-
-          // ── Pickup ────────────────────────────────────────────────────
-          const SizedBox(height: 14),
-
-          // ── Primary action ────────────────────────────────────────────
-          _SpringButton(
-            onTap: widget.onAccept,
-            child: Container(
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFF7A1A), Color(0xFFE9471C)],
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFFFF8F4), Color(0xFFFFEEE7)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: _kOrange.withValues(alpha: 0.28),
-                    blurRadius: 14,
-                    offset: const Offset(0, 7),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.storefront_rounded,
+                      color: _kOrange,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _kOrange,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Text(
+                            'NEW REQUEST',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          storeName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: _kTextDark,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Deliver to $customerName',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _kTextMid,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () => _showItemsSheet(context),
+                    icon: const Icon(Icons.list_alt_rounded, size: 16),
+                    style: TextButton.styleFrom(
+                      foregroundColor: _kOrange,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    label: const Text('Items'),
                   ),
                 ],
               ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.check_circle_outline_rounded,
-                    color: Colors.white,
-                    size: 20,
+                  _detailLine(
+                    'Placed',
+                    _formatDate(_orderCreatedAt(widget.order)),
                   ),
-                  SizedBox(width: 9),
-                  Text(
-                    'Accept delivery request',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                      letterSpacing: 0.1,
+                  _detailLine(
+                    'Phone',
+                    _text(widget.order.customerPhone, fallback: '—'),
+                  ),
+                  _detailLine('Address', _fullCustomerAddress(widget.order)),
+                  const SizedBox(height: 4),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7F3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFFD3C2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.order.isCod
+                                    ? 'COLLECT FROM CUSTOMER'
+                                    : 'ORDER TOTAL',
+                                style: const TextStyle(
+                                  color: _kTextMid,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 10,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                widget.order.isCod
+                                    ? 'Cash on delivery'
+                                    : 'Payment received online',
+                                style: const TextStyle(
+                                  color: _kTextDark,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '₹${(widget.order.codAmount ?? widget.order.totalAmount).toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: _kOrange,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 22,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: DecoratedBox(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFFFF7A1A), Color(0xFFE9471C)],
+                        ),
+                        borderRadius: BorderRadius.all(Radius.circular(15)),
+                      ),
+                      child: FilledButton.icon(
+                        onPressed: widget.onAccept,
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 19),
+                        label: const Text('Accept delivery request'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+
+  /* Removed duplicate legacy items sheet implementation.
+  Future<void> _showItemsSheet(BuildContext context) {
+    final items = _requestItems(widget.order);
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.82,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return Material(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                children: [
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '₹${(widget.order.codAmount ?? widget.order.totalAmount).toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: _kOrange,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 20,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: widget.onAccept,
+                      icon: const Icon(Icons.check_circle_outline, size: 19),
+                      label: const Text('Accept delivery request'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _kOrange,
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  }
+  */
 
   Future<void> _showItemsSheet(BuildContext context) {
     final items = _requestItems(widget.order);
@@ -1090,14 +1457,7 @@ class _NewRequestCardState extends State<_NewRequestCard> {
                     'Placed',
                     _formatDate(_orderCreatedAt(widget.order)),
                   ),
-                  _detailLine(
-                    'Amount',
-                    '₹${_amount(widget.order).toStringAsFixed(2)}',
-                  ),
-                  _detailLine(
-                    'Payment',
-                    _text(widget.order.paymentType, fallback: 'Online'),
-                  ),
+                  _DeliveryAmountSummary(order: widget.order),
                   const SizedBox(height: 18),
                   const Text(
                     'Ordered Items',
@@ -1164,39 +1524,39 @@ String _formatDate(DateTime dateTime) {
 }
 
 Widget _detailLine(String label, String value) {
-  return Padding(
-    padding: const EdgeInsets.only(bottom: 6),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 4,
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: _kTextMid,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 6,
-          child: Text(
-            value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.right,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: _kTextDark,
-            ),
-          ),
-        ),
-      ],
-    ),
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final stacked = constraints.maxWidth < 300;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: stacked
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: _smallLabelStyle),
+                  const SizedBox(height: 2),
+                  Text(value, style: _smallValueStyle),
+                ],
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: Text(label, style: _smallLabelStyle)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      value,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: _smallValueStyle,
+                    ),
+                  ),
+                ],
+              ),
+      );
+    },
   );
 }
 
@@ -1352,79 +1712,9 @@ String _fullCustomerAddress(dynamic order) {
   return address.isEmpty ? '—' : address;
 }
 
-double _amount(dynamic order) {
-  try {
-    final value = order.totalAmount;
-    if (value is num) return value.toDouble();
-  } catch (_) {}
-  try {
-    final value = order.earnings;
-    if (value is num) return value.toDouble();
-  } catch (_) {}
-  return 0;
-}
-
-class _RouteRow extends StatelessWidget {
-  const _RouteRow({
-    required this.icon,
-    required this.iconColor,
-    required this.label,
-    required this.line1,
-    required this.line2,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String label;
-  final String line1;
-  final String line2;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 18, color: iconColor),
-        const SizedBox(width: 8),
-        Expanded(
-          child: RichText(
-            text: TextSpan(
-              children: [
-                TextSpan(
-                  text: '$label ',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: _kTextDark,
-                  ),
-                ),
-                TextSpan(
-                  text: line1,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _kTextDark,
-                  ),
-                ),
-                if (line2.isNotEmpty)
-                  TextSpan(
-                    text: '\n$line2',
-                    style: const TextStyle(fontSize: 12, color: _kTextMid),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Active Order Card ────────────────────────────────────────────────────────
-
 class _ActiveOrderCard extends StatelessWidget {
   const _ActiveOrderCard({required this.order});
-  final dynamic order;
+  final DeliveryOrderModel order;
 
   @override
   Widget build(BuildContext context) {
@@ -1494,6 +1784,17 @@ class _ActiveOrderCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
+              'Store: ${_text(order.vendorStoreName, fallback: 'Store order')}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: _kOrange,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
               _text(order.customerName, fallback: 'Customer'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -1507,12 +1808,7 @@ class _ActiveOrderCard extends StatelessWidget {
             const SizedBox(height: 8),
             _detailRow('Phone', _text(order.customerPhone, fallback: '—')),
             _detailRow('Address', _fullCustomerAddress(order)),
-            _detailRow('Payment', _text(order.paymentType, fallback: '—')),
-            _detailRow(
-              'Order total',
-              '₹${_amount(order).toStringAsFixed(2)}',
-              valueColor: _kOrange,
-            ),
+            _DeliveryAmountSummary(order: order, compact: true),
             const SizedBox(height: 16),
             Container(
               width: double.infinity,
@@ -1544,103 +1840,381 @@ class _ActiveOrderCard extends StatelessWidget {
   }
 }
 
-Widget _detailRow(String label, String value, {Color valueColor = _kTextDark}) {
-  return Padding(
-    padding: const EdgeInsets.only(top: 10),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 4,
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: _kTextMid,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 6,
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: valueColor,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
+class _DeliveryAmountSummary extends StatelessWidget {
+  const _DeliveryAmountSummary({required this.order, this.compact = false});
 
-class _ActiveOrderStat extends StatelessWidget {
-  const _ActiveOrderStat({
-    required this.label,
-    required this.value,
-    this.valueColor = _kTextDark,
-    this.alignRight = false,
-  });
+  final DeliveryOrderModel order;
+  final bool compact;
 
-  final String label;
-  final String value;
-  final Color valueColor;
-  final bool alignRight;
+  String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: alignRight
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: _kTextMid,
-            letterSpacing: 0.4,
+    final payment = order.isCod ? 'Cash on delivery' : 'Paid online';
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(top: compact ? 8 : 0),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        children: [
+          _detailRow('Items subtotal', _money(order.itemSubtotal)),
+          _detailRow('Delivery fee', _money(order.deliveryFee)),
+          if (order.gstAmount > 0) _detailRow('GST', _money(order.gstAmount)),
+          _detailRow(
+            'Customer total',
+            _money(order.totalAmount),
+            valueColor: _kOrange,
           ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w900,
-            color: valueColor,
-          ),
-        ),
-      ],
+          _detailRow('Payment', payment),
+          if (order.isCod)
+            _detailRow(
+              'Collect from customer',
+              _money(order.codAmount ?? order.totalAmount),
+              valueColor: _kOrange,
+            ),
+        ],
+      ),
     );
   }
 }
 
-// ─── Map Grid Painter ─────────────────────────────────────────────────────────
+Widget _detailRow(String label, String value, {Color valueColor = _kTextDark}) {
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final stacked = constraints.maxWidth < 280;
+      final valueStyle = TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w800,
+        color: valueColor,
+      );
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: stacked
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: _amountLabelStyle),
+                  const SizedBox(height: 2),
+                  Text(value, style: valueStyle),
+                ],
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: Text(label, style: _amountLabelStyle)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      value,
+                      textAlign: TextAlign.right,
+                      softWrap: true,
+                      style: valueStyle,
+                    ),
+                  ),
+                ],
+              ),
+      );
+    },
+  );
+}
 
-class _MapGridPainter extends CustomPainter {
+const _smallLabelStyle = TextStyle(
+  fontSize: 11,
+  fontWeight: FontWeight.w700,
+  color: _kTextMid,
+);
+
+const _smallValueStyle = TextStyle(
+  fontSize: 12,
+  fontWeight: FontWeight.w800,
+  color: _kTextDark,
+);
+
+const _amountLabelStyle = TextStyle(
+  fontSize: 12,
+  fontWeight: FontWeight.w700,
+  color: _kTextMid,
+);
+
+// ─── Initial Payment Required Card ──────────────────────────────────────────
+
+class _InitialPaymentRequiredCard extends StatelessWidget {
+  const _InitialPaymentRequiredCard({
+    required this.amount,
+    required this.onPayTap,
+    required this.onVerifyTap,
+    this.isChecking = false,
+  });
+
+  final double amount;
+  final VoidCallback onPayTap;
+  final VoidCallback onVerifyTap;
+  final bool isChecking;
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.06)
-      ..strokeWidth = 1;
-
-    for (double x = 0; x < size.width; x += 28) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (double y = 0; y < size.height; y += 28) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
+  Widget build(BuildContext context) {
+    final displayAmount = amount > 0 ? amount.toStringAsFixed(0) : '500';
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _kCard,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFFFD8CC)),
+        boxShadow: [
+          BoxShadow(
+            color: _kOrange.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  color: _kOrangeLight,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.payments_rounded,
+                  color: _kOrange,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Initial Payment Required',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: _kTextDark,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Pay ₹$displayAmount onboarding fee to unlock orders',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: _kTextMid,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'UNPAID',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFFDC2626),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Order requests and online dispatch are locked until the initial partner fee is verified.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: _kTextDark.withValues(alpha: 0.75),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onPayTap,
+              icon: const Icon(Icons.lock_open_rounded, size: 18),
+              label: Text(
+                'Complete Payment (₹$displayAmount)',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kOrange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton.icon(
+              onPressed: isChecking ? null : onVerifyTap,
+              icon: isChecking
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _kOrange,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.refresh_rounded,
+                      size: 16,
+                      color: _kOrange,
+                    ),
+              label: Text(
+                isChecking
+                    ? 'Checking verification...'
+                    : 'Already paid? Check verification status',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _kOrange,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
+}
+
+// ─── Initial Payment Paid Card ──────────────────────────────────────────────
+
+class _InitialPaymentPaidCard extends StatelessWidget {
+  const _InitialPaymentPaidCard({
+    required this.amount,
+    this.completedAt,
+    required this.onViewTap,
+  });
+
+  final double amount;
+  final DateTime? completedAt;
+  final VoidCallback onViewTap;
 
   @override
-  bool shouldRepaint(_) => false;
+  Widget build(BuildContext context) {
+    final displayAmount = amount > 0 ? amount.toStringAsFixed(0) : '500';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: _kCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD1FAE5)),
+        boxShadow: [
+          BoxShadow(
+            color: _kGreen.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: const BoxDecoration(
+              color: Color(0xFFECFDF5),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_circle_rounded,
+              color: _kGreen,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 2,
+                  children: [
+                    const Text(
+                      'Initial Payment',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: _kTextDark,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD1FAE5),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'PAID',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          color: _kGreen,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '₹$displayAmount • Eligible to work',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: _kTextMid,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onViewTap,
+            style: TextButton.styleFrom(
+              foregroundColor: _kOrange,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text(
+              'Details',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── Delivery Sidebar ─────────────────────────────────────────────────────────
@@ -1663,6 +2237,7 @@ class _DeliverySidebarDrawer extends StatelessWidget {
       DeliveryHistoryScreen.routeName => 'History',
       DeliveryEarningsScreen.routeName => 'Earnings',
       DeliveryProfileScreen.routeName => 'Profile',
+      DeliveryInitialPaymentScreen.routeName => 'Initial Payment',
       _ => 'Home',
     };
 
@@ -1718,7 +2293,7 @@ class _DeliverySidebarDrawer extends StatelessWidget {
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
-                          provider.online ? 'ONLINE' : 'OFFLINE',
+                          provider.online ? 'ACTIVE' : 'INACTIVE',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
@@ -1785,6 +2360,20 @@ class _DeliverySidebarDrawer extends StatelessWidget {
                     selected: currentRoute == DeliveryProfileScreen.routeName,
                     onTap: () => _go(context, DeliveryProfileScreen.routeName),
                   ),
+                  _DrawerItem(
+                    icon: Icons.payments_rounded,
+                    label: 'Initial Payment',
+                    selected:
+                        currentRoute == DeliveryInitialPaymentScreen.routeName,
+                    badgeText: provider.isInitialPaymentPaid
+                        ? 'PAID'
+                        : 'REQUIRED',
+                    badgeColor: provider.isInitialPaymentPaid
+                        ? const Color(0xFF22C55E)
+                        : const Color(0xFFE8541A),
+                    onTap: () =>
+                        _go(context, DeliveryInitialPaymentScreen.routeName),
+                  ),
                 ],
               ),
             ),
@@ -1807,6 +2396,8 @@ class _DeliverySidebarDrawer extends StatelessWidget {
       ).push(MaterialPageRoute(builder: (_) => const DeliveryEarningsScreen()));
     } else if (route == DeliveryProfileScreen.routeName) {
       Navigator.of(context).pushNamed(route);
+    } else if (route == DeliveryInitialPaymentScreen.routeName) {
+      Navigator.of(context).pushNamed(route);
     }
   }
 }
@@ -1817,12 +2408,16 @@ class _DrawerItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.badgeText,
+    this.badgeColor,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final String? badgeText;
+  final Color? badgeColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1883,6 +2478,33 @@ class _DrawerItem extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (badgeText != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (badgeColor ?? const Color(0xFFE8541A)).withValues(
+                        alpha: 0.2,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: (badgeColor ?? const Color(0xFFE8541A))
+                            .withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: Text(
+                      badgeText!,
+                      style: TextStyle(
+                        color: badgeColor ?? const Color(0xFFE8541A),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Icon(
                   Icons.chevron_right_rounded,
                   color: Colors.white.withValues(alpha: 0.7),

@@ -15,6 +15,7 @@ class DeliverySocketService {
     required void Function(dynamic data) onOrderAssigned,
     required void Function(dynamic data) onOrderPacked,
     required void Function(dynamic data) onOrderPickedUp,
+    required void Function(dynamic data) onOrderOutForDelivery,
     required void Function(dynamic data) onOrderDelivered,
     void Function()? onDeliveryOnline,
     void Function()? onDeliveryOffline,
@@ -41,9 +42,7 @@ class DeliverySocketService {
         'room': 'available_delivery_persons',
         'deliveryPersonId': deliveryPersonId,
       });
-      _socket!.emit('join_room', {
-        'room': 'available_delivery_persons',
-      });
+      _socket!.emit('join_room', {'room': 'available_delivery_persons'});
       onDeliveryOnline?.call();
     });
 
@@ -64,11 +63,19 @@ class DeliverySocketService {
     _socket!.on('order:packed', onOrderPacked);
     _socket!.on('order_packed', onOrderPacked);
     _socket!.on('order_picked_up', onOrderPickedUp);
+    _socket!.on('order_out_for_delivery', onOrderOutForDelivery);
+    _socket!.on('order:out_for_delivery', onOrderOutForDelivery);
     _socket!.on('order_delivered', onOrderDelivered);
   }
 
-  void emitAcceptOrder({required String orderId, required String deliveryPersonId}) {
-    _socket?.emit('accept_order', {'orderId': orderId, 'deliveryPersonId': deliveryPersonId});
+  void emitAcceptOrder({
+    required String orderId,
+    required String deliveryPersonId,
+  }) {
+    _socket?.emit('accept_order', {
+      'orderId': orderId,
+      'deliveryPersonId': deliveryPersonId,
+    });
   }
 
   void emitDeliveryOffline({required String deliveryPersonId}) {

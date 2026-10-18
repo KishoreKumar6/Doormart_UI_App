@@ -26,7 +26,8 @@ class DeliveryOrderItem {
   double get lineTotal => unitPrice * quantity;
 
   factory DeliveryOrderItem.fromJson(Map<String, dynamic> json) {
-    final rawPrice = json['price'] ?? json['unitPrice'] ?? json['amount'] ?? json['rate'];
+    final rawPrice =
+        json['price'] ?? json['unitPrice'] ?? json['amount'] ?? json['rate'];
     return DeliveryOrderItem(
       imageUrl: NetworkImageUrl.normalize(json['imageUrl'] as String?),
       name: json['name'] as String? ?? 'Item',
@@ -70,6 +71,7 @@ class DeliveryOrderModel {
     this.deliveredAt,
     this.deliveryOtp,
     this.deliveryFee = 0.0,
+    this.gstAmount = 0.0,
   });
 
   final String id;
@@ -86,6 +88,7 @@ class DeliveryOrderModel {
   final List<DeliveryOrderItem> items;
   final double totalAmount;
   final double deliveryFee;
+  final double gstAmount;
   final String paymentType;
   final DeliveryOrderStatus status;
   final DateTime createdAt;
@@ -106,9 +109,15 @@ class DeliveryOrderModel {
   final String? deliveryOtp;
 
   int get itemCount => items.fold<int>(0, (sum, item) => sum + item.quantity);
+  double get itemSubtotal => items.fold<double>(
+    0,
+    (sum, item) => sum + item.lineTotal,
+  );
   bool get isCod => paymentType.toLowerCase() == 'cod';
   String get displayOrderId {
-    final source = (orderId ?? id).replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
+    final source = (orderId ?? id)
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
+        .toUpperCase();
     if (source.isEmpty) return 'DMD-000-000';
 
     final tail = source.length >= 6
@@ -122,50 +131,92 @@ class DeliveryOrderModel {
   String get deliveryOtpDisplay {
     if ((deliveryOtp ?? '').isNotEmpty) return deliveryOtp!;
     final digits = id.replaceAll(RegExp(r'[^0-9]'), '');
-    final tail = digits.length >= 6 ? digits.substring(digits.length - 6) : digits.padLeft(6, '0');
+    final tail = digits.length >= 6
+        ? digits.substring(digits.length - 6)
+        : digits.padLeft(6, '0');
     return tail;
   }
 
   factory DeliveryOrderModel.fromJson(Map<String, dynamic> json) {
-    final itemsJson = (json['items'] as List<dynamic>? ?? json['products'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .toList();
+    final itemsJson =
+        (json['items'] as List<dynamic>? ??
+                json['products'] as List<dynamic>? ??
+                [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
     final user = json['user'];
     final userMap = user is Map<String, dynamic> ? user : null;
     final address = json['address'];
     final addressMap = address is Map<String, dynamic> ? address : null;
-    final addressText = [
-      addressMap?['line1'] ?? addressMap?['addressLine1'] ?? addressMap?['street'],
-      addressMap?['area'],
-      addressMap?['landmark'],
-      addressMap?['city'],
-      addressMap?['state'],
-      addressMap?['pincode'],
-    ].where((part) => part != null && part.toString().trim().isNotEmpty).map((part) => part.toString().trim()).join(', ');
+    final addressText =
+        [
+              addressMap?['line1'] ??
+                  addressMap?['addressLine1'] ??
+                  addressMap?['street'],
+              addressMap?['area'],
+              addressMap?['landmark'],
+              addressMap?['city'],
+              addressMap?['state'],
+              addressMap?['pincode'],
+            ]
+            .where((part) => part != null && part.toString().trim().isNotEmpty)
+            .map((part) => part.toString().trim())
+            .join(', ');
     final addressLocation = _extractLocation(addressMap?['location']);
 
     return DeliveryOrderModel(
       id: json['_id'] as String? ?? json['id'] as String? ?? '',
       orderId: json['orderId'] as String? ?? json['order_id'] as String?,
-      customerName: json['customerName'] as String? ?? userMap?['name'] as String? ?? json['userName'] as String? ?? 'Customer',
-      customerPhone: json['customerPhone'] as String? ?? userMap?['phone'] as String? ?? json['phone'] as String? ?? '',
-      customerAddress: json['customerAddress'] as String? ??
-          (addressText.isNotEmpty ? addressText : (json['address']?.toString() ?? '')),
-      customerArea: json['customerArea'] as String? ?? addressMap?['area'] as String? ?? addressMap?['city'] as String? ?? json['area'] as String? ?? 'Unknown area',
-      customerLine1: json['customerLine1'] as String? ??
+      customerName:
+          json['customerName'] as String? ??
+          userMap?['name'] as String? ??
+          json['userName'] as String? ??
+          'Customer',
+      customerPhone:
+          json['customerPhone'] as String? ??
+          userMap?['phone'] as String? ??
+          json['phone'] as String? ??
+          '',
+      customerAddress:
+          json['customerAddress'] as String? ??
+          (addressText.isNotEmpty
+              ? addressText
+              : (json['address']?.toString() ?? '')),
+      customerArea:
+          json['customerArea'] as String? ??
+          addressMap?['area'] as String? ??
+          addressMap?['city'] as String? ??
+          json['area'] as String? ??
+          'Unknown area',
+      customerLine1:
+          json['customerLine1'] as String? ??
           addressMap?['line1'] as String? ??
           addressMap?['addressLine1'] as String? ??
           addressMap?['street'] as String?,
-      customerLandmark: json['customerLandmark'] as String? ?? addressMap?['landmark'] as String?,
-      customerCity: json['customerCity'] as String? ?? addressMap?['city'] as String?,
+      customerLandmark:
+          json['customerLandmark'] as String? ??
+          addressMap?['landmark'] as String?,
+      customerCity:
+          json['customerCity'] as String? ?? addressMap?['city'] as String?,
       customerState:
           json['customerState'] as String? ?? addressMap?['state'] as String?,
-      customerPincode: json['customerPincode'] as String? ?? addressMap?['pincode'] as String?,
+      customerPincode:
+          json['customerPincode'] as String? ??
+          addressMap?['pincode'] as String?,
       items: itemsJson.map(DeliveryOrderItem.fromJson).toList(),
-      totalAmount: (json['totalAmount'] as num? ?? json['total'] as num? ?? 0).toDouble(),
-      paymentType: json['paymentType'] as String? ?? json['paymentMethod'] as String? ?? json['payment_method'] as String? ?? 'Online',
+      totalAmount: (json['totalAmount'] as num? ?? json['total'] as num? ?? 0)
+          .toDouble(),
+      paymentType:
+          json['paymentType'] as String? ??
+          json['paymentMethod'] as String? ??
+          json['payment_method'] as String? ??
+          'Online',
       status: _statusFromJson(json['status'] as String?),
-      createdAt: _parseDate(json['createdAt'] as String? ?? json['dateTime'] as String? ?? '') ?? DateTime.now(),
+      createdAt:
+          _parseDate(
+            json['createdAt'] as String? ?? json['dateTime'] as String? ?? '',
+          ) ??
+          DateTime.now(),
       vendorStoreName: json['vendorStoreName'] as String?,
       vendorAddress: json['vendorAddress'] as String?,
       vendorPickupAddress: json['vendorPickupAddress'] as String?,
@@ -173,15 +224,23 @@ class DeliveryOrderModel {
       vendorState: json['vendorState'] as String?,
       vendorPincode: json['vendorPincode'] as String?,
       vendorPhone: json['vendorPhone'] as String?,
-      customerLatitude: _asDouble(json['customerLatitude']) ?? addressLocation?.latitude,
-      customerLongitude: _asDouble(json['customerLongitude']) ?? addressLocation?.longitude,
+      customerLatitude:
+          _asDouble(json['customerLatitude']) ?? addressLocation?.latitude,
+      customerLongitude:
+          _asDouble(json['customerLongitude']) ?? addressLocation?.longitude,
       vendorLatitude: _asDouble(json['vendorLatitude']),
       vendorLongitude: _asDouble(json['vendorLongitude']),
-      deliveredAt: _parseDate(json['deliveredAt'] as String? ?? json['completedAt'] as String? ?? json['deliveryCompletedAt'] as String? ?? ''),
+      deliveredAt: _parseDate(
+        json['deliveredAt'] as String? ??
+            json['completedAt'] as String? ??
+            json['deliveryCompletedAt'] as String? ??
+            '',
+      ),
       codAmount: (json['codAmount'] as num?)?.toDouble(),
       deliveryEarning: (json['deliveryEarning'] as num?)?.toDouble(),
       deliveryOtp: json['deliveryOtp'] as String?,
       deliveryFee: (json['deliveryFee'] as num? ?? json['delivery_fee'] as num? ?? 0).toDouble(),
+      gstAmount: (json['gstAmount'] as num? ?? json['gst_amount'] as num? ?? 0).toDouble(),
     );
   }
 }
@@ -207,18 +266,23 @@ double? _asDouble(dynamic value) {
 _LocationPoint? _extractLocation(dynamic value) {
   if (value is! Map<String, dynamic>) return null;
   final latitude = _asDouble(value['latitude'] ?? value['lat']);
-  final longitude = _asDouble(value['longitude'] ?? value['lng'] ?? value['lon']);
+  final longitude = _asDouble(
+    value['longitude'] ?? value['lng'] ?? value['lon'],
+  );
   if (latitude == null || longitude == null) return null;
   return _LocationPoint(latitude: latitude, longitude: longitude);
 }
 
 DeliveryOrderStatus _statusFromJson(String? value) {
   return switch (value) {
-    'WAITING_FOR_ACCEPT' || 'waiting_for_accept' || 'placed' => DeliveryOrderStatus.waitingForAccept,
+    'WAITING_FOR_ACCEPT' ||
+    'waiting_for_accept' ||
+    'placed' => DeliveryOrderStatus.waitingForAccept,
     'ACCEPTED' || 'accepted' => DeliveryOrderStatus.accepted,
     'packed' || 'PACKED' => DeliveryOrderStatus.packed,
     'PICKED_UP' || 'picked_up' => DeliveryOrderStatus.pickedUp,
-    'OUT_FOR_DELIVERY' || 'out_for_delivery' => DeliveryOrderStatus.outForDelivery,
+    'OUT_FOR_DELIVERY' ||
+    'out_for_delivery' => DeliveryOrderStatus.outForDelivery,
     'DELIVERED' || 'delivered' => DeliveryOrderStatus.delivered,
     'REJECTED' || 'rejected' => DeliveryOrderStatus.rejected,
     _ => DeliveryOrderStatus.waitingForAccept,

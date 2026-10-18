@@ -134,7 +134,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 _TopBar(onBack: () => Navigator.pop(context)),
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 40),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -142,7 +142,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         const Text(
                           'Confirm delivery\nand payment',
                           style: TextStyle(
-                            fontSize: 30,
+                            fontSize: 34,
                             fontWeight: FontWeight.w900,
                             color: _kTextDark,
                             height: 1.1,
@@ -224,7 +224,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           )
                         else
                           SizedBox(
-                            height: 198,
+                            height: 224,
                             child: ListView.separated(
                               scrollDirection: Axis.horizontal,
                               itemCount: addresses.length,
@@ -273,10 +273,36 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 .distanceBasedDeliveryFee(selectedAddress);
                             final localDeliveryBreakdown = state
                                 .deliveryChargeBreakdown(selectedAddress);
+                            final serverVendorFees =
+                                summary?['deliveryFeesByVendor']
+                                    as Map<String, dynamic>?;
+                            final effectiveDeliveryBreakdown =
+                                serverVendorFees == null
+                                ? localDeliveryBreakdown
+                                : localDeliveryBreakdown
+                                      .map(
+                                        (entry) => DeliveryChargeBreakdown(
+                                          vendorId: entry.vendorId,
+                                          storeName: entry.storeName,
+                                          distanceKm: entry.distanceKm,
+                                          fee:
+                                              (serverVendorFees[entry.vendorId]
+                                                      as num?)
+                                                  ?.toDouble() ??
+                                              entry.fee,
+                                        ),
+                                      )
+                                      .toList();
                             final deliveryDistance = state.cartDistanceKm(
                               selectedAddress,
                             );
+                            final serverDeliveryFee =
+                                summary != null &&
+                                    summary.containsKey('deliveryFee')
+                                ? (summary['deliveryFee'] as num?)?.toDouble()
+                                : null;
                             final calculatedDeliveryFee =
+                                serverDeliveryFee ??
                                 localDistanceFee ??
                                 (summary?['calculatedDeliveryFee'] as num?)
                                     ?.toDouble() ??
@@ -307,7 +333,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               total: total,
                               distanceKm: deliveryDistance,
                               chargePerKm: state.deliveryBaseCharge,
-                              deliveryBreakdown: localDeliveryBreakdown,
+                              deliveryBreakdown: effectiveDeliveryBreakdown,
                               freeDeliveryUnlocked: freeDeliveryUnlocked,
                               loading:
                                   snapshot.connectionState ==
@@ -515,7 +541,7 @@ class _SectionLabel extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(
-        fontSize: 16,
+        fontSize: 19,
         fontWeight: FontWeight.w900,
         color: _kTextDark,
       ),
@@ -543,7 +569,7 @@ class _AddressCard extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
-        width: 210,
+        width: 235,
         constraints: const BoxConstraints(minHeight: 166),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -597,7 +623,7 @@ class _AddressCard extends StatelessWidget {
             Text(
               data.label,
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: _kTextDark,
               ),
@@ -608,7 +634,7 @@ class _AddressCard extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 11.5,
+                fontSize: 13,
                 color: Color(0xFF666666),
                 height: 1.25,
               ),
@@ -617,7 +643,7 @@ class _AddressCard extends StatelessWidget {
             Text(
               data.shortAddress,
               style: const TextStyle(
-                fontSize: 10.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: _kTextMid,
               ),
@@ -670,10 +696,10 @@ class _SummaryCard extends StatelessWidget {
     final effectiveTotal = subtotal + effectiveDeliveryFee + gstAmount;
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -689,15 +715,54 @@ class _SummaryCard extends StatelessWidget {
             const LinearProgressIndicator(minHeight: 2),
             const SizedBox(height: 14),
           ],
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _kOrangeLight,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.receipt_long_rounded,
+                  color: _kOrange,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Order summary',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: _kTextDark,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Review your charges before payment',
+                      style: TextStyle(fontSize: 12, color: _kTextMid),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
           const Text(
-            'Items in your cart',
+            'ITEMS IN YOUR CART',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: FontWeight.w900,
-              color: _kTextDark,
+              letterSpacing: 0.8,
+              color: _kTextMid,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           if (items.isEmpty)
             const Text(
               'No items in cart',
@@ -713,12 +778,21 @@ class _SummaryCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Row(
                   children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: _kOrange,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         line.product.name,
                         style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
                           color: _kTextDark,
                         ),
                         maxLines: 1,
@@ -727,31 +801,62 @@ class _SummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                     Text(
-                      'Qty x${line.quantity}',
+                      'x${line.quantity}',
                       style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
                         color: _kOrange,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Rs ${line.total.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: _kTextDark,
                       ),
                     ),
                   ],
                 ),
               ),
             ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Divider(height: 1),
+          ),
+          const Text(
+            'CHARGES',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.8,
+              color: _kTextMid,
+            ),
+          ),
           const SizedBox(height: 8),
           _SummaryRow(label: 'Subtotal', value: subtotal),
           const SizedBox(height: 10),
           if (deliveryBreakdown.length > 1) ...[
+            const Text(
+              'Delivery fee by store',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: _kTextDark,
+              ),
+            ),
+            const SizedBox(height: 8),
             ...deliveryBreakdown.map(
               (entry) => Padding(
                 padding: const EdgeInsets.only(bottom: 7),
-                child: _SummaryRow(
-                  label:
-                      '${entry.storeName} (${entry.distanceKm.toStringAsFixed(1)} km × ₹${chargePerKm?.toStringAsFixed(2) ?? '0.00'})',
+                child: _StoreDeliveryFeeRow(
+                  storeName: entry.storeName,
+                  distanceKm: entry.distanceKm,
+                  chargePerKm: chargePerKm,
                   value: isFree ? 0 : entry.fee,
                   valueText: isFree ? 'Rs 0.00' : null,
                   valueColor: isFree ? const Color(0xFF16A34A) : null,
-                  compact: true,
                 ),
               ),
             ),
@@ -767,9 +872,7 @@ class _SummaryCard extends StatelessWidget {
             ),
           ] else
             _SummaryRow(
-              label: distanceKm != null && chargePerKm != null
-                  ? 'Delivery fee (${distanceKm!.toStringAsFixed(1)} km × ₹${chargePerKm!.toStringAsFixed(2)})'
-                  : 'Delivery fee',
+              label: 'Delivery fee',
               value: effectiveDeliveryFee,
               valueText: effectiveDeliveryFee <= 0 ? 'Rs 0.00' : null,
               valueColor: effectiveDeliveryFee <= 0
@@ -829,11 +932,39 @@ class _SummaryCard extends StatelessWidget {
                 ),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1, color: Colors.grey.shade100),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: _kOrangeLight,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFFFD2C1)),
+            ),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'FINAL TOTAL',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.7,
+                      color: _kTextDark,
+                    ),
+                  ),
+                ),
+                Text(
+                  'Rs ${effectiveTotal.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: _kOrange,
+                  ),
+                ),
+              ],
+            ),
           ),
-          _SummaryRow(label: 'Total', value: effectiveTotal, bold: true),
         ],
       ),
     );
@@ -845,7 +976,6 @@ class _SummaryRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.bold = false,
-    this.compact = false,
     this.valueText,
     this.valueColor,
   });
@@ -853,7 +983,6 @@ class _SummaryRow extends StatelessWidget {
   final String label;
   final double value;
   final bool bold;
-  final bool compact;
   final String? valueText;
   final Color? valueColor;
 
@@ -861,27 +990,113 @@ class _SummaryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final displayText = valueText ?? 'Rs ${value.toStringAsFixed(2)}';
     final textColor = valueColor ?? (bold ? _kOrange : _kTextDark);
+    final labelStyle = TextStyle(
+      fontSize: bold ? 17 : 15,
+      height: 1.25,
+      color: bold ? _kTextDark : const Color(0xFF666666),
+      fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+    );
+    final valueStyle = TextStyle(
+      fontSize: bold ? 20 : 15,
+      height: 1.2,
+      color: textColor,
+      fontWeight: bold ? FontWeight.w900 : FontWeight.w600,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked = constraints.maxWidth < 280;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: stacked
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: labelStyle),
+                    const SizedBox(height: 3),
+                    Text(displayText, style: valueStyle),
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 2,
+                        softWrap: true,
+                        style: labelStyle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(displayText, style: valueStyle),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+}
+
+class _StoreDeliveryFeeRow extends StatelessWidget {
+  const _StoreDeliveryFeeRow({
+    required this.storeName,
+    required this.distanceKm,
+    required this.chargePerKm,
+    required this.value,
+    this.valueText,
+    this.valueColor,
+  });
+
+  final String storeName;
+  final double distanceKm;
+  final double? chargePerKm;
+  final double value;
+  final String? valueText;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    // Very small distances can round to 0.00 km while the backend still
+    // applies the configured minimum/base delivery fee.
+    final explanation = distanceKm < 0.005
+        ? 'Minimum delivery fee'
+        : '${distanceKm.toStringAsFixed(2)} km × ₹${chargePerKm?.toStringAsFixed(2) ?? '0.00'}/km';
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Text(
-            label,
-            maxLines: compact ? 2 : 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: bold ? 15 : (compact ? 11 : 13),
-              color: bold ? _kTextDark : const Color(0xFF666666),
-              fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                storeName,
+                maxLines: 2,
+                softWrap: true,
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.2,
+                  fontWeight: FontWeight.w700,
+                  color: _kTextDark,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                explanation,
+                maxLines: 2,
+                softWrap: true,
+                style: const TextStyle(fontSize: 10, color: _kTextMid),
+              ),
+            ],
           ),
         ),
         const SizedBox(width: 10),
         Text(
-          displayText,
+          valueText ?? 'Rs ${value.toStringAsFixed(2)}',
           style: TextStyle(
-            fontSize: bold ? 17 : 13,
-            color: textColor,
-            fontWeight: bold ? FontWeight.w900 : FontWeight.w600,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: valueColor ?? _kTextDark,
           ),
         ),
       ],
@@ -944,7 +1159,7 @@ class _ActionButtonState extends State<_ActionButton>
         scale: _scale,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          height: 54,
+          height: 62,
           width: double.infinity,
           decoration: BoxDecoration(
             gradient: active
@@ -988,7 +1203,7 @@ class _ActionButtonState extends State<_ActionButton>
                       Text(
                         widget.label,
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: active ? Colors.white : Colors.grey,
                         ),
@@ -1045,7 +1260,7 @@ class _CashfreeButtonState extends State<_CashfreeButton>
         scale: _scale,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          height: 54,
+          height: 62,
           width: double.infinity,
           decoration: BoxDecoration(
             gradient: widget.enabled
