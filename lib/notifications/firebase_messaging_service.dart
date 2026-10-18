@@ -108,7 +108,9 @@ class FirebaseMessagingService {
       token: authToken,
       body: {
         'fcmToken': token,
-        'deviceType': Platform.isAndroid
+        'deviceType': kIsWeb
+            ? 'web'
+            : Platform.isAndroid
             ? 'android'
             : Platform.isIOS
             ? 'ios'

@@ -259,11 +259,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                       onPressed: () =>
                           setState(() => _obscurePass = !_obscurePass),
                     ),
-                    validator: (v) => Validators.password(
-                      v,
-                      minLength: 6,
-                      message: 'Enter a new password',
-                    ),
+                    validator: (v) {
+                      final basic = Validators.password(
+                        v,
+                        minLength: 8,
+                        message: 'Enter a new password',
+                      );
+                      if (basic != null) return basic;
+                      final password = v!.trim();
+                      if (!RegExp(r'[A-Za-z]').hasMatch(password) ||
+                          !RegExp(r'\d').hasMatch(password)) {
+                        return 'Use at least 8 characters with a letter and number';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 16),
                   _FieldLabel('Confirm password'),

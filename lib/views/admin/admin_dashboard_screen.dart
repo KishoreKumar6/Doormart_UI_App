@@ -474,7 +474,13 @@ class _AdminOverviewPanelState extends State<_AdminOverviewPanel> {
   @override
   void initState() {
     super.initState();
-    _loadFuture = _loadOverview();
+    _loadFuture = Future<void>.value();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _loadFuture = _loadOverview();
+      });
+    });
   }
 
   Future<void> _loadOverview() async {
