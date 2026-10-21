@@ -276,23 +276,43 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             final serverVendorFees =
                                 summary?['deliveryFeesByVendor']
                                     as Map<String, dynamic>?;
+                            final serverVendorDistances =
+                                summary?['deliveryDistancesByVendor']
+                                    as Map<String, dynamic>?;
+                            final serverRatePerKm =
+                                (summary?['deliveryRatePerKm'] as num?)
+                                    ?.toDouble();
                             final effectiveDeliveryBreakdown =
                                 serverVendorFees == null
                                 ? localDeliveryBreakdown
-                                : localDeliveryBreakdown
-                                      .map(
-                                        (entry) => DeliveryChargeBreakdown(
-                                          vendorId: entry.vendorId,
-                                          storeName: entry.storeName,
-                                          distanceKm: entry.distanceKm,
-                                          fee:
-                                              (serverVendorFees[entry.vendorId]
-                                                      as num?)
-                                                  ?.toDouble() ??
-                                              entry.fee,
-                                        ),
-                                      )
-                                      .toList();
+                                : serverVendorFees.entries.map((serverEntry) {
+                                    final localEntry = localDeliveryBreakdown
+                                        .where(
+                                          (entry) =>
+                                              entry.vendorId == serverEntry.key,
+                                        )
+                                        .firstOrNull;
+                                    final feeValue = serverEntry.value is Map
+                                        ? (serverEntry.value['fee'] as num?)
+                                              ?.toDouble()
+                                        : (serverEntry.value as num?)?.toDouble();
+                                    final distanceValue =
+                                        (serverVendorDistances?[serverEntry.key]
+                                                as num?)
+                                            ?.toDouble() ??
+                                        localEntry?.distanceKm;
+                                    return DeliveryChargeBreakdown(
+                                      vendorId: serverEntry.key,
+                                      storeName:
+                                          localEntry?.storeName ??
+                                          _storeNameForVendor(
+                                            state.cart,
+                                            serverEntry.key,
+                                          ),
+                                      distanceKm: distanceValue ?? 0,
+                                      fee: feeValue ?? localEntry?.fee ?? 0,
+                                    );
+                                  }).toList();
                             final deliveryDistance = state.cartDistanceKm(
                               selectedAddress,
                             );
@@ -332,7 +352,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               gstAmount: gstAmount,
                               total: total,
                               distanceKm: deliveryDistance,
-                              chargePerKm: state.deliveryBaseCharge,
+                              chargePerKm:
+                                  serverRatePerKm != null &&
+                                      serverRatePerKm > 0
+                                  ? serverRatePerKm
+                                  : state.deliveryBaseCharge,
                               deliveryBreakdown: effectiveDeliveryBreakdown,
                               freeDeliveryUnlocked: freeDeliveryUnlocked,
                               loading:
@@ -657,6 +681,19 @@ class _AddressCard extends StatelessWidget {
 
 // ─── Summary Card ─────────────────────────────────────────────────────────────
 
+String _storeNameForVendor(List<CartLine> cart, String vendorId) {
+  for (final line in cart) {
+    final lineVendorId = line.product.vendorId.trim().isEmpty
+        ? 'main'
+        : line.product.vendorId.trim();
+    if (lineVendorId == vendorId &&
+        line.product.supplierName.trim().isNotEmpty) {
+      return line.product.supplierName.trim();
+    }
+  }
+  return vendorId == 'main' ? 'Main Store' : vendorId;
+}
+
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.items,
@@ -835,9 +872,14 @@ class _SummaryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          _SummaryRow(label: 'Subtotal', value: subtotal),
+          _SummaryRow(
+            label: 'Subtotal',
+            value: subtotal,
+            bold: true,
+            valueColor: _kOrange,
+          ),
           const SizedBox(height: 10),
-          if (deliveryBreakdown.length > 1) ...[
+          if (deliveryBreakdown.isNotEmpty) ...[
             const Text(
               'Delivery fee by store',
               style: TextStyle(

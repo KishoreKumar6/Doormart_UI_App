@@ -14,53 +14,20 @@ class OrderSuccessScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F8F8),
       body: SafeArea(
         child: Consumer<AppState>(
           builder: (context, state, _) {
             final latest = state.orders.isEmpty ? null : state.orders.first;
             return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const SizedBox(height: 16),
-
-                  // Delivery illustration circle
-                  Container(
-                    width: 148,
-                    height: 148,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF0EB),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(
-                            0xFFE8541A,
-                          ).withValues(alpha: 0.12),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: ClipOval(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: latest != null && latest.products.isNotEmpty
-                            ? _OrderImage(
-                                imageUrl: latest.products.first.imageUrl,
-                              )
-                            : Image.asset(
-                                'assets/images/delivery_boy.png',
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => const Icon(
-                                  Icons.delivery_dining,
-                                  size: 72,
-                                  color: Color(0xFFE8541A),
-                                ),
-                              ),
-                      ),
-                    ),
+                  _CelebrationHero(
+                    imageUrl: latest != null && latest.products.isNotEmpty
+                        ? latest.products.first.imageUrl
+                        : null,
                   ),
 
                   const SizedBox(height: 20),
@@ -69,14 +36,14 @@ class OrderSuccessScreen extends StatelessWidget {
                   const Text(
                     'Order Confirmed',
                     style: TextStyle(
-                      fontSize: 26,
+                      fontSize: 30,
                       fontWeight: FontWeight.w900,
                       color: Color(0xFF1A1A1A),
                     ),
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'Your order was placed successfully',
+                    'Your order is on the way',
                     style: TextStyle(
                       fontSize: 14,
                       color: Color(0xFF999999),
@@ -84,7 +51,7 @@ class OrderSuccessScreen extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 22),
 
                   // Product card
                   if (latest != null) ...[
@@ -108,7 +75,7 @@ class OrderSuccessScreen extends StatelessWidget {
                                 color: const Color(0xFFEEEEEE),
                               ),
                             ),
-                            child: latest != null && latest.products.isNotEmpty
+                            child: latest.products.isNotEmpty
                                 ? ClipRRect(
                                     borderRadius: BorderRadius.circular(10),
                                     child: _OrderThumb(
@@ -272,6 +239,287 @@ class OrderSuccessScreen extends StatelessWidget {
     if (order == null || order.quantities.isEmpty) return '—';
     final total = order.quantities.fold<int>(0, (sum, value) => sum + value);
     return total == 1 ? '1 item' : '$total items';
+  }
+}
+
+class _CelebrationHero extends StatefulWidget {
+  const _CelebrationHero({this.imageUrl});
+
+  final String? imageUrl;
+
+  @override
+  State<_CelebrationHero> createState() => _CelebrationHeroState();
+}
+
+class _CelebrationHeroState extends State<_CelebrationHero>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _motionController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  )..repeat(reverse: true);
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _motionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 252,
+      width: double.infinity,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 20,
+            child: Container(
+              width: 220,
+              height: 180,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFE9DF),
+                borderRadius: BorderRadius.circular(54),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFE8541A).withValues(alpha: 0.12),
+                    blurRadius: 34,
+                    offset: const Offset(0, 18),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedBuilder(
+            animation: _motionController,
+            builder: (context, child) {
+              final value = _motionController.value;
+              final lift = -8 * Curves.easeInOut.transform(value);
+              final tilt = (value - 0.5) * 0.035;
+              return Transform(
+                alignment: Alignment.center,
+                transform: Matrix4.identity()
+                  ..setEntry(3, 2, 0.0012)
+                  ..rotateZ(tilt)
+                  ..translateByDouble(0.0, lift, 0.0, 1.0),
+                child: child,
+              );
+            },
+            child: Container(
+              width: 204,
+              height: 164,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(38),
+                border: Border.all(
+                  color: const Color(0xFFFFC7B0),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 24,
+                    offset: const Offset(0, 14),
+                  ),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: _DeliveryScene(
+                animation: _motionController,
+                imageUrl: widget.imageUrl,
+              ),
+            ),
+          ),
+          Positioned(
+            left: 36,
+            bottom: 22,
+            child: _FloatingBadge(
+              icon: Icons.shopping_bag_rounded,
+              color: const Color(0xFFE8541A),
+              delay: 0.15,
+            ),
+          ),
+          Positioned(
+            right: 34,
+            top: 28,
+            child: _FloatingBadge(
+              icon: Icons.local_shipping_rounded,
+              color: const Color(0xFF16A34A),
+              delay: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveryScene extends StatelessWidget {
+  const _DeliveryScene({required this.animation, this.imageUrl});
+
+  final Animation<double> animation;
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        final progress = Curves.easeInOut.transform(animation.value);
+        final scooterOffset = -12 + (progress * 24);
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFFFF8F4), Color(0xFFFFE5D8)],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 26,
+              right: 26,
+              bottom: 54,
+              child: Row(
+                children: List.generate(
+                  7,
+                  (index) => Expanded(
+                    child: Container(
+                      height: 3,
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        color: index.isEven
+                            ? const Color(0xFFFFB18F)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 30 + scooterOffset,
+              bottom: 65,
+              child: const Icon(
+                Icons.local_shipping_rounded,
+                size: 68,
+                color: Color(0xFFE8541A),
+              ),
+            ),
+            Positioned(
+              top: 25 + (progress * 5),
+              left: 46,
+              child: Transform.rotate(
+                angle: -0.12,
+                child: Container(
+                  width: 44,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 8,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.inventory_2_rounded,
+                    color: Colors.white,
+                    size: 23,
+                  ),
+                ),
+              ),
+            ),
+            if (imageUrl != null)
+              Positioned(
+                right: 26,
+                top: 27,
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 9,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: _OrderImage(imageUrl: imageUrl!),
+                  ),
+                ),
+              ),
+            const Positioned(
+              right: 14,
+              bottom: 12,
+              child: CircleAvatar(
+                radius: 21,
+                backgroundColor: Color(0xFFE8541A),
+                child: Icon(
+                  Icons.check_rounded,
+                  color: Colors.white,
+                  size: 27,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _FloatingBadge extends StatelessWidget {
+  const _FloatingBadge({
+    required this.icon,
+    required this.color,
+    required this.delay,
+  });
+
+  final IconData icon;
+  final Color color;
+  final double delay;
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: delay == 0.15 ? -0.12 : 0.12,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.22),
+              blurRadius: 14,
+              offset: const Offset(0, 7),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: color, size: 24),
+      ),
+    );
   }
 }
 
