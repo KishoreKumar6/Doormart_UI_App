@@ -160,9 +160,10 @@ class _NewOrderRequestCardState extends State<NewOrderRequestCard> {
     final day = local.day.toString().padLeft(2, '0');
     final month = local.month.toString().padLeft(2, '0');
     final year = local.year;
-    final hour = local.hour.toString().padLeft(2, '0');
+    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
     final minute = local.minute.toString().padLeft(2, '0');
-    return '$day/$month/$year, $hour:$minute';
+    final period = local.hour >= 12 ? 'PM' : 'AM';
+    return '$day/$month/$year, $hour:$minute $period';
   }
 }
 

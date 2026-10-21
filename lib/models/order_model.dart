@@ -36,6 +36,8 @@ class OrderModel {
     this.deliveryOtp,
     this.completionReason = '',
     this.deliveryFee = 0.0,
+    this.gstAmount = 0.0,
+    this.vendorStoreName = '',
   });
 
   final String id;
@@ -44,6 +46,7 @@ class OrderModel {
   final String paymentMethod;
   final double total;
   final double deliveryFee;
+  final double gstAmount;
   final OrderStatus status;
   final DateTime createdAt;
   final String vendorId;
@@ -60,6 +63,7 @@ class OrderModel {
   final DateTime? deliveredAt;
   final String? deliveryOtp;
   final String completionReason;
+  final String vendorStoreName;
 
   String get displayOrderId {
     final source = id.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
@@ -176,7 +180,12 @@ class OrderModel {
       deliveredAt: _parseDateTime(json['deliveredAt']),
       deliveryOtp: json['deliveryOtp']?.toString(),
       completionReason: json['completionReason']?.toString() ?? '',
-      deliveryFee: (json['deliveryFee'] as num? ?? json['delivery_fee'] as num? ?? 0).toDouble(),
+      deliveryFee:
+          (json['deliveryFee'] as num? ?? json['delivery_fee'] as num? ?? 0)
+              .toDouble(),
+      gstAmount: (json['gstAmount'] as num? ?? json['gst_amount'] as num? ?? 0)
+          .toDouble(),
+      vendorStoreName: json['vendorStoreName']?.toString() ?? '',
     );
   }
 }

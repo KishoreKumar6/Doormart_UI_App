@@ -115,6 +115,8 @@ class AppState extends ChangeNotifier {
   List<ProductModel> favorites = [];
   List<ProductModel> buyAgainProducts = [];
   List<OrderModel> orders = [];
+  // Preserves every vendor split from the latest checkout for confirmation UI.
+  List<OrderModel> lastCheckoutOrders = [];
   List<OrderModel> adminOrders = [];
   List<AddressModel> savedAddresses = [];
   List<Map<String, dynamic>> supportTickets = [];
@@ -1962,6 +1964,7 @@ class AppState extends ChangeNotifier {
       throw StateError('Order creation failed');
     }
     orders.insertAll(0, createdOrders.reversed.toList());
+    lastCheckoutOrders = List<OrderModel>.unmodifiable(createdOrders);
     await clearCart();
     await loadBuyAgainProducts();
     return createdOrders.first;

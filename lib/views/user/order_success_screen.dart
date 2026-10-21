@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/utils/network_image_url.dart';
 import '../../models/order_model.dart';
+import '../../models/product_model.dart';
 import '../../providers/app_state.dart';
 import '../user/user_home_screen.dart';
 
@@ -18,7 +19,34 @@ class OrderSuccessScreen extends StatelessWidget {
       body: SafeArea(
         child: Consumer<AppState>(
           builder: (context, state, _) {
-            final latest = state.orders.isEmpty ? null : state.orders.first;
+            final confirmedOrders = state.lastCheckoutOrders.isNotEmpty
+                ? state.lastCheckoutOrders
+                : (state.orders.isEmpty
+                      ? const <OrderModel>[]
+                      : [state.orders.first]);
+            final latest = confirmedOrders.isEmpty
+                ? null
+                : confirmedOrders.first;
+            final totalItems = confirmedOrders.fold<int>(
+              0,
+              (sum, order) => sum + _quantity(order),
+            );
+            final subtotal = confirmedOrders.fold<double>(
+              0,
+              (sum, order) => sum + _subtotal(order),
+            );
+            final deliveryFee = confirmedOrders.fold<double>(
+              0,
+              (sum, order) => sum + order.deliveryFee,
+            );
+            final gst = confirmedOrders.fold<double>(
+              0,
+              (sum, order) => sum + order.gstAmount,
+            );
+            final grandTotal = confirmedOrders.fold<double>(
+              0,
+              (sum, order) => sum + order.total,
+            );
             return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 32),
               child: Column(
@@ -53,79 +81,21 @@ class OrderSuccessScreen extends StatelessWidget {
 
                   const SizedBox(height: 22),
 
-                  // Product card
-                  if (latest != null) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFAFAFA),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFF0F0F0)),
-                      ),
-                      child: Row(
+                  if (confirmedOrders.isNotEmpty) ...[
+                    _SectionCard(
+                      title: 'Items ordered',
+                      icon: Icons.shopping_bag_outlined,
+                      child: Column(
                         children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: const Color(0xFFEEEEEE),
-                              ),
-                            ),
-                            child: latest.products.isNotEmpty
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: _OrderThumb(
-                                      imageUrl: latest.products.first.imageUrl,
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.shopping_bag_outlined,
-                                    color: Color(0xFF999999),
-                                    size: 24,
-                                  ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  latest.products.isNotEmpty
-                                      ? latest.products.first.name
-                                      : 'Your Order',
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF1A1A1A),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  latest.products.isNotEmpty
-                                      ? latest.products.first.category
-                                      : '',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFFAAAAAA),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            'Rs ${latest.total.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF1A1A1A),
-                            ),
-                          ),
+                          for (
+                            var index = 0;
+                            index < confirmedOrders.length;
+                            index++
+                          ) ...[
+                            _OrderDetailsCard(order: confirmedOrders[index]),
+                            if (index != confirmedOrders.length - 1)
+                              const SizedBox(height: 14),
+                          ],
                         ],
                       ),
                     ),
@@ -146,30 +116,53 @@ class OrderSuccessScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
 
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                  _SectionCard(
+                    title: 'Order details',
+                    icon: Icons.receipt_long_outlined,
                     child: Column(
                       children: [
+                        _SummaryRow(label: 'Items', value: '$totalItems'),
+                        const SizedBox(height: 12),
                         _SummaryRow(
-                          label: 'Quantity',
-                          value: _quantityLabel(latest),
+                          label:
+                              'Order ID${confirmedOrders.length > 1 ? 's' : ''}',
+                          value: confirmedOrders.isEmpty
+                              ? '—'
+                              : confirmedOrders
+                                    .map((order) => order.displayOrderId)
+                                    .join(', '),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         _SummaryRow(
-                          label: 'Order ID',
-                          value: latest?.displayOrderId ?? '—',
+                          label: 'Payment',
+                          value: latest?.paymentMethod == 'cod'
+                              ? 'Cash on delivery'
+                              : 'Paid online',
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         _SummaryRow(
-                          label: 'Shipping Address',
+                          label: 'Delivering to',
                           value: latest?.address ?? '—',
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         _SummaryRow(
-                          label: 'Estimated Delivery Date',
+                          label: 'Estimated delivery',
                           value: _estimatedDelivery(),
                         ),
+                        if (confirmedOrders.isNotEmpty) ...[
+                          const Divider(height: 28),
+                          _PriceRow(label: 'Subtotal', value: subtotal),
+                          const SizedBox(height: 8),
+                          _PriceRow(label: 'Delivery fee', value: deliveryFee),
+                          const SizedBox(height: 8),
+                          _PriceRow(label: 'GST', value: gst),
+                          const Divider(height: 28),
+                          _PriceRow(
+                            label: 'Total paid / payable',
+                            value: grandTotal,
+                            emphasize: true,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -235,10 +228,18 @@ class OrderSuccessScreen extends StatelessWidget {
     return 'Today, ${hour12.toString().padLeft(2, '0')}:$minute $period';
   }
 
-  String _quantityLabel(OrderModel? order) {
-    if (order == null || order.quantities.isEmpty) return '—';
-    final total = order.quantities.fold<int>(0, (sum, value) => sum + value);
-    return total == 1 ? '1 item' : '$total items';
+  static int _quantity(OrderModel order) =>
+      order.quantities.fold<int>(0, (sum, value) => sum + value);
+
+  static double _subtotal(OrderModel order) {
+    var total = 0.0;
+    for (var index = 0; index < order.products.length; index++) {
+      final quantity = index < order.quantities.length
+          ? order.quantities[index]
+          : 1;
+      total += order.products[index].price * quantity;
+    }
+    return total;
   }
 }
 
@@ -317,10 +318,7 @@ class _CelebrationHeroState extends State<_CelebrationHero>
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(38),
-                border: Border.all(
-                  color: const Color(0xFFFFC7B0),
-                  width: 2,
-                ),
+                border: Border.all(color: const Color(0xFFFFC7B0), width: 2),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.12),
@@ -474,11 +472,7 @@ class _DeliveryScene extends StatelessWidget {
               child: CircleAvatar(
                 radius: 21,
                 backgroundColor: Color(0xFFE8541A),
-                child: Icon(
-                  Icons.check_rounded,
-                  color: Colors.white,
-                  size: 27,
-                ),
+                child: Icon(Icons.check_rounded, color: Colors.white, size: 27),
               ),
             ),
           ],
@@ -566,6 +560,241 @@ class _SummaryRow extends StatelessWidget {
   }
 }
 
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
+
+  final String title;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFF0E5E0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF0EB),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: const Color(0xFFE8541A), size: 21),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderDetailsCard extends StatelessWidget {
+  const _OrderDetailsCard({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final storeName = order.vendorStoreName.trim().isNotEmpty
+        ? order.vendorStoreName.trim()
+        : (order.vendorId == 'main' ? 'DoorMart Store' : 'Store order');
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBF9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFE0D2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.storefront_outlined,
+                color: Color(0xFFE8541A),
+                size: 19,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  storeName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              Text(
+                order.displayOrderId,
+                style: const TextStyle(
+                  color: Color(0xFF8A8A8A),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (var index = 0; index < order.products.length; index++) ...[
+            _OrderItemRow(
+              product: order.products[index],
+              quantity: index < order.quantities.length
+                  ? order.quantities[index]
+                  : 1,
+            ),
+            if (index != order.products.length - 1) const Divider(height: 18),
+          ],
+          const Divider(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Store order total',
+                style: TextStyle(
+                  color: Color(0xFF777777),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                'Rs ${order.total.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: Color(0xFFE8541A),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderItemRow extends StatelessWidget {
+  const _OrderItemRow({required this.product, required this.quantity});
+
+  final ProductModel product;
+  final int quantity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: _OrderThumb(imageUrl: product.imageUrl),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                product.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                'Qty $quantity × Rs ${product.price.toStringAsFixed(2)}',
+                style: const TextStyle(color: Color(0xFF777777), fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          'Rs ${(product.price * quantity).toStringAsFixed(2)}',
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+        ),
+      ],
+    );
+  }
+}
+
+class _PriceRow extends StatelessWidget {
+  const _PriceRow({
+    required this.label,
+    required this.value,
+    this.emphasize = false,
+  });
+
+  final String label;
+  final double value;
+  final bool emphasize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: emphasize
+                ? const Color(0xFF1A1A1A)
+                : const Color(0xFF777777),
+            fontWeight: emphasize ? FontWeight.w900 : FontWeight.w600,
+            fontSize: emphasize ? 16 : 14,
+          ),
+        ),
+        Text(
+          'Rs ${value.toStringAsFixed(2)}',
+          style: TextStyle(
+            color: emphasize
+                ? const Color(0xFFE8541A)
+                : const Color(0xFF1A1A1A),
+            fontWeight: FontWeight.w900,
+            fontSize: emphasize ? 19 : 14,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _OrderImage extends StatelessWidget {
   const _OrderImage({required this.imageUrl});
 
@@ -578,7 +807,7 @@ class _OrderImage extends StatelessWidget {
       return Image.network(
         normalized,
         fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => const Icon(
+        errorBuilder: (_, _, _) => const Icon(
           Icons.delivery_dining,
           size: 72,
           color: Color(0xFFE8541A),
@@ -589,7 +818,7 @@ class _OrderImage extends StatelessWidget {
       return Image.asset(
         normalized,
         fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => const Icon(
+        errorBuilder: (_, _, _) => const Icon(
           Icons.delivery_dining,
           size: 72,
           color: Color(0xFFE8541A),
