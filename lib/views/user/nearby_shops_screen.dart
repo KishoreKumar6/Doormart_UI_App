@@ -32,6 +32,7 @@ class _NearbyShopsScreenState extends State<NearbyShopsScreen> {
   List<_NearbyShop> _shops = const [];
   bool _loading = true;
   String? _message;
+  bool _apiUnavailable = false;
   double _radiusKm = AppState.nearbyRadiusKm;
 
   @override
@@ -45,6 +46,7 @@ class _NearbyShopsScreenState extends State<NearbyShopsScreen> {
     setState(() {
       _loading = true;
       _message = null;
+      _apiUnavailable = false;
       _radiusKm = radius;
     });
 
@@ -52,7 +54,7 @@ class _NearbyShopsScreenState extends State<NearbyShopsScreen> {
     ({double latitude, double longitude})? location;
     try {
       location = await LocationService().nearbyLocation().timeout(
-        const Duration(seconds: 12),
+        const Duration(seconds: 25),
       );
     } catch (error) {
       locationError = error;
@@ -96,6 +98,7 @@ class _NearbyShopsScreenState extends State<NearbyShopsScreen> {
       setState(() {
         _shops = const [];
         _loading = false;
+        _apiUnavailable = true;
         _message = 'Unable to load nearby shops. Please try again.';
       });
     }
@@ -143,8 +146,10 @@ class _NearbyShopsScreenState extends State<NearbyShopsScreen> {
     if (_loading) return const _ShopLoadingList();
     if (_message != null) {
       return _ShopMessage(
-        icon: Icons.location_off_rounded,
-        title: 'Location needed',
+        icon: _apiUnavailable
+            ? Icons.cloud_off_rounded
+            : Icons.location_off_rounded,
+        title: _apiUnavailable ? 'Nearby shops unavailable' : 'Location needed',
         message: _message!,
         actionLabel: 'Try again',
         onAction: () => _loadShops(),

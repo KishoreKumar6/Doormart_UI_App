@@ -16,57 +16,62 @@ class LocationService {
       _lastNearbyLocation;
 
   Future<({double latitude, double longitude})> currentLocation() async {
-    if (!await Geolocator.isLocationServiceEnabled()) {
+    return _readCurrentLocation(timeLimit: const Duration(seconds: 20));
+  }
+
+  Future<({double latitude, double longitude})> nearbyLocation() async {
+    return _readCurrentLocation(timeLimit: const Duration(seconds: 20));
+  }
+
+  Future<({double latitude, double longitude})> _readCurrentLocation({
+    required Duration timeLimit,
+  }) async {
+    // The web implementation always reports the service as enabled because
+    // browsers do not expose a separate GPS-service switch. Checking it on
+    // web can therefore incorrectly turn a browser permission issue into a
+    // phone-GPS error.
+    if (!kIsWeb && !await Geolocator.isLocationServiceEnabled()) {
       throw StateError('Location services are disabled');
     }
 
     var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
+    // On web, requestPermission() internally calls getCurrentPosition().
+    // Calling it after the Permissions API says "denied" can convert a
+    // recoverable browser prompt into deniedForever. Let the browser API make
+    // the request from getCurrentPosition instead.
+    if (permission == LocationPermission.denied && !kIsWeb) {
       permission = await Geolocator.requestPermission();
     }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
+    if (permission == LocationPermission.deniedForever) {
       throw StateError('Location permission is required');
     }
 
     final position = await _getCurrentPositionWithRetry(
       LocationSettings(
+        // High accuracy is unreliable on some desktop browsers and can make
+        // an already-allowed request time out. Android still uses high GPS
+        // accuracy; web uses the browser's normal location provider.
         accuracy: kIsWeb ? LocationAccuracy.medium : LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 15),
+        timeLimit: timeLimit,
       ),
     );
-    final location = (
-      latitude: position.latitude,
-      longitude: position.longitude,
-    );
-    await _cacheLocation(location);
-    return location;
-  }
-
-  Future<({double latitude, double longitude})> nearbyLocation() async {
-    if (!await Geolocator.isLocationServiceEnabled()) {
-      throw StateError('Location services are disabled');
+    final latitude = position.latitude;
+    final longitude = position.longitude;
+    if (!latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      throw StateError('Location coordinates are invalid');
     }
-
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
+    final location = (latitude: latitude, longitude: longitude);
+    if (kDebugMode) {
+      debugPrint(
+        '[location] coordinates acquired (${kIsWeb ? 'web' : 'native'}); '
+        'accuracy=${position.accuracy.toStringAsFixed(0)}m',
+      );
     }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      throw StateError('Location permission is required');
-    }
-
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: LocationSettings(
-        accuracy: kIsWeb ? LocationAccuracy.high : LocationAccuracy.high,
-        timeLimit: Duration(seconds: kIsWeb ? 10 : 10),
-      ),
-    );
-    final location = (
-      latitude: position.latitude,
-      longitude: position.longitude,
-    );
     await _cacheLocation(location);
     return location;
   }

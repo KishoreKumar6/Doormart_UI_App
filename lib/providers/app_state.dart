@@ -129,6 +129,7 @@ class AppState extends ChangeNotifier {
   bool nearbyVendorsLoading = false;
   bool nearbyLocationUnavailable = false;
   String nearbyLocationMessage = '';
+  String nearbyStoresErrorMessage = '';
   DateTime? _nearbyVendorLoadedAt;
   final List<CartLine> cart = [];
   int _cartMutationToken = 0;
@@ -378,6 +379,7 @@ class AppState extends ChangeNotifier {
     nearbyVendorsLoading = true;
     nearbyLocationUnavailable = false;
     nearbyLocationMessage = '';
+    nearbyStoresErrorMessage = '';
     notifyListeners();
 
     final location = await _resolveNearbyLocation();
@@ -404,12 +406,17 @@ class AppState extends ChangeNotifier {
           .toSet();
       nearbyLocationUnavailable = false;
       nearbyLocationMessage = '';
+      nearbyStoresErrorMessage = '';
       _nearbyVendorLoadedAt = DateTime.now();
     } catch (error) {
-      debugPrint('Nearby vendor cache load skipped: $error');
+      if (kDebugMode) {
+        debugPrint('[nearby] store API request failed: ${error.runtimeType}');
+      }
       nearbyVendorIds = const {};
       nearbyLocationUnavailable = false;
       nearbyLocationMessage = '';
+      nearbyStoresErrorMessage =
+          'Nearby stores are temporarily unavailable. Please try again.';
       _nearbyVendorLoadedAt = DateTime.now();
     } finally {
       nearbyVendorsLoading = false;
@@ -424,18 +431,20 @@ class AppState extends ChangeNotifier {
   _resolveNearbyLocation() async {
     try {
       final gpsLocation = await LocationService().nearbyLocation().timeout(
-        const Duration(seconds: 12),
+        const Duration(seconds: 25),
       );
-      debugPrint(
-        'Nearby location source=gps lat=${gpsLocation.latitude} lng=${gpsLocation.longitude}',
-      );
+      if (kDebugMode) {
+        debugPrint('[nearby] location source=gps; coordinates acquired');
+      }
       return (latitude: gpsLocation.latitude, longitude: gpsLocation.longitude);
     } catch (error) {
       final cachedLocation = await LocationService().cachedNearbyLocation();
       if (cachedLocation != null) {
-        debugPrint(
-          'Nearby GPS unavailable; using cached location lat=${cachedLocation.latitude} lng=${cachedLocation.longitude}: $error',
-        );
+        if (kDebugMode) {
+          debugPrint(
+            '[nearby] GPS unavailable; using cached location: ${error.runtimeType}',
+          );
+        }
         return cachedLocation;
       }
       final message = error.toString();
@@ -446,7 +455,9 @@ class AppState extends ChangeNotifier {
                 ? 'Click the location icon in the browser address bar, choose Allow, then tap Try again.'
                 : 'Allow location permission to see nearby stores.')
           : 'Turn on location and allow permission to see nearby stores.';
-      debugPrint('Nearby GPS unavailable: $error');
+      if (kDebugMode) {
+        debugPrint('[nearby] GPS unavailable: ${error.runtimeType}');
+      }
       return null;
     }
   }

@@ -64,21 +64,25 @@ Future<({double latitude, double longitude})?> _resolveSharedNearbyLocation(
 ) async {
   try {
     final gpsLocation = await LocationService().nearbyLocation().timeout(
-      const Duration(seconds: 12),
+      const Duration(seconds: 25),
     );
-    debugPrint(
-      'Nearby location source=gps lat=${gpsLocation.latitude} lng=${gpsLocation.longitude}',
-    );
+    if (kDebugMode) {
+      debugPrint('[nearby] shared location source=gps; coordinates acquired');
+    }
     return gpsLocation;
   } catch (error) {
     final cachedLocation = await LocationService().cachedNearbyLocation();
     if (cachedLocation != null) {
-      debugPrint(
-        'Nearby GPS unavailable; using cached location lat=${cachedLocation.latitude} lng=${cachedLocation.longitude}: $error',
-      );
+      if (kDebugMode) {
+        debugPrint(
+          '[nearby] shared GPS unavailable; using cached location: ${error.runtimeType}',
+        );
+      }
       return cachedLocation;
     }
-    debugPrint('Nearby GPS unavailable: $error');
+    if (kDebugMode) {
+      debugPrint('[nearby] shared GPS unavailable: ${error.runtimeType}');
+    }
     return null;
   }
 }
@@ -2148,9 +2152,7 @@ class _BuyAgainProductCard extends StatelessWidget {
                           ),
                         ),
                         if (isClosed)
-                          ClosedStoreOverlay(
-                            label: _closedStoreLabel(product),
-                          ),
+                          ClosedStoreOverlay(label: _closedStoreLabel(product)),
                       ],
                     ),
                   ),
@@ -3078,25 +3080,26 @@ class _EssentialsGridState extends State<_EssentialsGrid> {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (ctx, state, _) {
-        if (state.nearbyVendorsLoading) {
+        // Daily essentials is a product feed, so it should remain visible when
+        // the optional nearby-store lookup is unavailable. Use the nearby
+        // filtered list when that lookup succeeds; otherwise use the products
+        // already loaded for the home/product-list flow.
+        final nearbyLookupReady =
+            !state.nearbyVendorsLoading &&
+            !state.nearbyLocationUnavailable &&
+            state.nearbyStoresErrorMessage.isEmpty;
+        final sourceProducts = nearbyLookupReady
+            ? state.nearbyProducts
+            : state.products;
+
+        if (state.nearbyVendorsLoading && state.products.isEmpty) {
           return const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
             child: Center(child: CircularProgressIndicator(color: _kGreen)),
           );
         }
-        if (state.nearbyLocationUnavailable) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: _LocationActionCard(
-              message: state.nearbyLocationMessage.isNotEmpty
-                  ? state.nearbyLocationMessage
-                  : 'Turn on location and allow permission to see daily essentials near you.',
-              onRetry: () => state.loadNearbyVendorIds(force: true),
-            ),
-          );
-        }
         var products = _sectionProducts(
-          state.nearbyProducts,
+          sourceProducts,
           'daily_essentials',
         );
         if (widget.selectedCategory != 'All') {
@@ -3123,6 +3126,18 @@ class _EssentialsGridState extends State<_EssentialsGrid> {
             break;
         }
         if (products.isEmpty) {
+          if (nearbyLookupReady && state.nearbyVendorIds.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _LocationActionCard(
+                title: 'No nearby stores found',
+                icon: Icons.storefront_outlined,
+                message:
+                    'There are no stores with products available near your current location.',
+                onRetry: () => state.loadNearbyVendorIds(force: true),
+              ),
+            );
+          }
           return const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: _EmptyProductsCard(
@@ -5159,10 +5174,17 @@ class _SeeAllNearbyShopsButton extends StatelessWidget {
 }
 
 class _LocationActionCard extends StatelessWidget {
-  const _LocationActionCard({required this.message, this.onRetry});
+  const _LocationActionCard({
+    required this.message,
+    this.onRetry,
+    this.title = 'Location needed',
+    this.icon = Icons.location_off_rounded,
+  });
 
   final String message;
   final VoidCallback? onRetry;
+  final String title;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -5190,15 +5212,15 @@ class _LocationActionCard extends StatelessWidget {
               color: _kGreenLight,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.location_off_rounded, color: _kGreen),
+            child: Icon(icon, color: _kGreen),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Location needed',
+                Text(
+                  title,
                   style: TextStyle(
                     color: _kTextDark,
                     fontWeight: FontWeight.w900,
